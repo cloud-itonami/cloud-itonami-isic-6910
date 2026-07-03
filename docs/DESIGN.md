@@ -43,7 +43,7 @@ formation.operation/build          (OperationActor: langgraph-clj StateGraph)
 
 ## 4. RegistrarGovernor（独立検閲層）
 
-8チェック、優先順位順。最初の6つは HARD（人間が承認で上書き不可）:
+9チェック、優先順位順。最初の7つは HARD（人間が承認で上書き不可）:
 
 1. **spec-basis** -- `:jurisdiction/assess` / `:filing/submit` /
    `:registry/amend` / `:registry/dissolve` の提案が `formation.facts` の
@@ -67,16 +67,25 @@ formation.operation/build          (OperationActor: langgraph-clj StateGraph)
 4. **document-complete** -- `:filing/submit` の時点で、法域の必要書類が
    実際に充足しているか（advisor の自己申告 confidence を信用せず、
    governor 自身が `formation.facts/required-docs-satisfied?` で検証）。
-5. **amendment-target** -- `:registry/amend` の対象申請に registry_number
+5. **post-filing-intake-block** -- `:application/intake` は**どのフェーズの
+   `:auto` にも含まれる唯一の op**（`formation.phase`、事前入力を速くする
+   ため）。それゆえ、対象申請が既に `:filed` または `:dissolved` なら
+   intake 自体を hold する。さもないと capital・address・officers・status
+   など何でも**人間承認ゼロ・governor スクルーティニーゼロで**書き換え
+   られてしまう -- amend/dissolve が担保する actuation ゲート全体を
+   迂回するバックドアになる。修正は常に「`:registry/amend`（または
+   `:registry/dissolve`）を使う」であり、「intake を承認する」ではない
+   （そもそも intake は escalate すらせず即 hold のため承認経路が無い）。
+6. **amendment-target** -- `:registry/amend` の対象申請に registry_number
    （= 初回登記済み）があるか、かつ変更内容が空でないか。未登記への変更登記
    提案・空の変更提案はどちらも hold。
-6. **dissolution-target** -- `:registry/dissolve` の対象申請に
+7. **dissolution-target** -- `:registry/dissolve` の対象申請に
    registry_number があるか、かつ既に解散済み（二重解散）でないか。
 
 残り2つは SOFT（人間が承認すればよい）:
 
-7. **confidence floor** -- confidence が閾値未満なら escalate。
-8. **actuation gate** -- `:stake :actuation`（実際の政府提出・実際の変更
+8. **confidence floor** -- confidence が閾値未満なら escalate。
+9. **actuation gate** -- `:stake :actuation`（実際の政府提出・実際の変更
    登記提出・実際の解散登記提出・実際の手数料送金）は常に escalate。
    **`formation.phase` のどのフェーズの `:auto` 集合にも `:filing/submit`
    / `:registry/amend` / `:registry/dissolve` を含めない**ことと合わせて、

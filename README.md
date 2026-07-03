@@ -55,6 +55,15 @@ see `formation.phase`'s docstring and `test/formation/phase_test.clj`'s
 screen and recommend; a human operator is always the one who actually
 files, amends, dissolves and pays.
 
+**`:application/intake` is the one op that DOES auto-commit** (it's the
+only member of any phase's `:auto` set -- pre-filing customer data entry
+needs to be fast, not gated). To keep that from becoming a backdoor
+around everything above, the governor blocks intake outright once an
+application is `:filed` or `:dissolved` (`:post-filing-intake-blocked`):
+every post-filing change to capital, address, officers or anything else
+must go through `:registry/amend` / `:registry/dissolve` instead, which
+carry the full spec-basis + officer-screening + human-approval gate.
+
 ## The core contract
 
 ```
@@ -111,7 +120,7 @@ full architecture and decision record.
 | `src/formation/registry.cljc` | ISO 17442 LEI issuance (ISO 7064 MOD 97-10) + incorporation/amendment/dissolution draft records -- ported from `matsurigoto`'s corp-registry (etzhayyim/root, ADR-2606062300) |
 | `src/formation/facts.cljc` | Per-jurisdiction requirement catalog with an official spec-basis citation per entry, honest coverage reporting |
 | `src/formation/registrarllm.cljc` | **Registrar-LLM Advisor** -- `mock-advisor` ‖ `llm-advisor`; intake/assessment/KYC/filing/amendment/dissolution proposals |
-| `src/formation/governor.cljc` | **RegistrarGovernor** -- spec-basis · sanctions hold · document-complete · amendment-target · dissolution-target · confidence floor · actuation gate |
+| `src/formation/governor.cljc` | **RegistrarGovernor** -- spec-basis · sanctions hold · KYC-complete · document-complete · post-filing-intake-block · amendment-target · dissolution-target · confidence floor · actuation gate |
 | `src/formation/phase.cljc` | **Phase 0→3** -- read-only → assisted intake → assisted assess/screen → supervised (filing always human) |
 | `src/formation/operation.cljc` | **OperationActor** -- langgraph-clj StateGraph |
 | `src/formation/sim.cljc` | demo driver |

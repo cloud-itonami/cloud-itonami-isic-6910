@@ -6,7 +6,7 @@
   proposal and fall back to HOLD -- the company-formation analog of
   robotaxi's Minimal Risk Condition and gftd-talent-actor's PolicyGovernor.
 
-  Eight checks, in priority order. The first six are HARD violations: a
+  Nine checks, in priority order. The first seven are HARD violations: a
   human approver CANNOT override them (you don't get to approve your way
   past a sanctions hit or a fabricated legal requirement). The last two are
   SOFT: they ask a human to look (low confidence / actuation), and the
@@ -29,15 +29,26 @@
                              with zero screening ever performed.
     4. Document complete  -- for a filing proposal, are the jurisdiction's
                              required docs actually satisfied?
-    5. Amendment target   -- for an amendment proposal, is there an
+    5. Post-filing intake -- `:application/intake` is the ONLY op any
+                             phase ever puts in its `:auto` set (it
+                             auto-commits with NO human approval). Once an
+                             application is :filed or :dissolved, intake
+                             is blocked outright -- every further change
+                             (capital, address, officers, anything) MUST
+                             go through :registry/amend or
+                             :registry/dissolve, which cite a spec-basis,
+                             screen officers and always require a human.
+                             Without this, intake is an unguarded
+                             backdoor around the entire actuation gate.
+    6. Amendment target   -- for an amendment proposal, is there an
                              existing registry number to amend, and is the
                              amendment actually non-empty?
-    6. Dissolution target -- for a dissolution proposal, is there an
+    7. Dissolution target -- for a dissolution proposal, is there an
                              existing registry number to dissolve, and is
                              the entity not ALREADY dissolved (no double
                              dissolution)?
-    7. Confidence floor   -- LLM confidence below threshold -> escalate.
-    8. Actuation gate     -- :stake :actuation -> always escalate; never
+    8. Confidence floor   -- LLM confidence below threshold -> escalate.
+    9. Actuation gate     -- :stake :actuation -> always escalate; never
                              auto, at any phase (structural, not a policy
                              toggle)."
   (:require [formation.facts :as facts]
@@ -127,6 +138,25 @@
         [{:rule :incomplete-documents
           :detail "法域の必要書類が充足していない状態での提出提案"}]))))
 
+(defn- post-filing-intake-violations
+  "`:application/intake` exists for PRE-FILING customer data entry --
+  normalizing/validating a patch before anything is submitted to a real
+  registry. It is also the ONLY op in ANY phase's `:auto` set
+  (`formation.phase`), meaning it auto-commits with no human approval at
+  all. Once an application is `:filed` or `:dissolved`, allowing intake to
+  keep touching it would let capital, address, officers or even status
+  itself be silently rewritten with ZERO governor scrutiny -- a
+  structural bypass of the entire actuation gate that :registry/amend and
+  :registry/dissolve exist to enforce. HARD, un-overridable: the fix is
+  always 'use :registry/amend (or :registry/dissolve)', never 'approve
+  the intake anyway'."
+  [{:keys [op subject]} st]
+  (when (= op :application/intake)
+    (let [app (store/application st subject)]
+      (when (contains? #{:filed :dissolved} (:status app))
+        [{:rule :post-filing-intake-blocked
+          :detail "登記/解散済みの申請への intake 経由の変更は禁止。:registry/amend または :registry/dissolve を使うこと"}]))))
+
 (defn- amendment-violations
   "For `:registry/amend`, the target application must already carry a
   registry number (you cannot amend a filing that was never submitted),
@@ -173,6 +203,7 @@
                            (sanctions-violations request proposal st)
                            (kyc-completeness-violations request proposal st)
                            (document-violations request st)
+                           (post-filing-intake-violations request st)
                            (amendment-violations request proposal st)
                            (dissolution-violations request st)))
         conf (:confidence proposal 0.0)

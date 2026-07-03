@@ -129,6 +129,50 @@
   (exec-op actor "setup-c" {:op :filing/submit :subject "app-1"} operator)
   (approve! actor "setup-c"))
 
+(deftest post-filing-intake-cannot-smuggle-changes-around-amendment
+  (testing ":application/intake auto-commits with NO approval -- once :filed, it must not be able to
+            silently rewrite capital, address or officers behind the actuation gate's back"
+    (let [[db actor] (fresh)]
+      (file-app-1! actor)
+      (let [before (store/application db "app-1")
+            res (exec-op actor "t7a" {:op :application/intake :subject "app-1"
+                                      :patch {:id "app-1" :capital 1 :address "FAKE"
+                                             :officers ["o-1" "o-2"]}} operator)]
+        (is (= :hold (get-in res [:state :disposition])) "settles immediately, no interrupt, no auto-commit")
+        (is (not= :interrupted (:status res)))
+        (is (some #{:post-filing-intake-blocked} (-> (store/ledger db) last :basis)))
+        (is (= before (store/application db "app-1")) "application completely unchanged")))))
+
+(deftest post-filing-intake-is-blocked-even-for-a-harmless-looking-patch
+  (testing "the block is unconditional once :filed -- not contingent on the patch looking dangerous"
+    (let [[db actor] (fresh)]
+      (file-app-1! actor)
+      (let [res (exec-op actor "t7b" {:op :application/intake :subject "app-1"
+                                      :patch {:id "app-1" :entity-name "Kotoba Trading GK"}} operator)]
+        (is (= :hold (get-in res [:state :disposition])))
+        (is (some #{:post-filing-intake-blocked} (-> (store/ledger db) last :basis)))))))
+
+(deftest post-filing-intake-is-blocked-after-dissolution-too
+  (testing "a dissolved application is just as protected as a filed one"
+    (let [[db actor] (fresh)]
+      (file-app-1! actor)
+      (exec-op actor "t7c-a" {:op :registry/dissolve :subject "app-1"
+                              :reason "voluntary wind-up" :effective-date "2026-08-01"} operator)
+      (approve! actor "t7c-a")
+      (let [res (exec-op actor "t7c" {:op :application/intake :subject "app-1"
+                                      :patch {:id "app-1" :status :intake}} operator)]
+        (is (= :hold (get-in res [:state :disposition])))
+        (is (some #{:post-filing-intake-blocked} (-> (store/ledger db) last :basis)))
+        (is (= :dissolved (:status (store/application db "app-1"))) "status was not reverted")))))
+
+(deftest intake-before-filing-still-works-normally
+  (testing "the block is post-filing ONLY -- pre-filing intake is unaffected and still auto-commits"
+    (let [[db actor] (fresh)
+          res (exec-op actor "t7d" {:op :application/intake :subject "app-1"
+                                    :patch {:id "app-1" :capital 2000000}} operator)]
+      (is (= :commit (get-in res [:state :disposition])))
+      (is (= 2000000 (:capital (store/application db "app-1")))))))
+
 (deftest amendment-without-a-filed-application-is-held
   (testing "an application with no registry_number has nothing to amend -> HOLD"
     (let [[db actor] (fresh)
@@ -141,18 +185,23 @@
 
 (defn- drift-jurisdiction-to-atl!
   "Simulates a data-consistency edge case: a filed application's
-  :jurisdiction field drifts to one with no spec-basis (e.g. a bad
-  upsert) AFTER filing. registry-number/status stay set from the original
-  valid filing, so only the spec-basis check protects amend/dissolve here."
-  [actor tid subject]
-  (exec-op actor tid {:op :application/intake :subject subject
-                      :patch {:id subject :jurisdiction "ATL"}} operator))
+  :jurisdiction field drifts to one with no spec-basis AFTER filing.
+  registry-number/status stay set from the original valid filing, so
+  only the spec-basis check protects amend/dissolve here. Deliberately
+  bypasses the actor (direct store/commit-record!, not :application/
+  intake) -- post-filing-intake-violations now correctly blocks intake
+  from touching a :filed application at all, so this can no longer
+  happen through the actor's own operations; it models a lower-level
+  data-migration bug or a future write-path this governor never saw."
+  [db subject]
+  (store/commit-record! db {:effect :application/upsert
+                            :value {:id subject :jurisdiction "ATL"}}))
 
 (deftest amendment-requires-a-spec-basis-even-with-a-registry-number
   (testing "a registry_number alone is not enough -- jurisdiction must still have a citable spec-basis"
     (let [[db actor] (fresh)]
       (file-app-1! actor)
-      (drift-jurisdiction-to-atl! actor "t8b" "app-1")
+      (drift-jurisdiction-to-atl! db "app-1")
       (let [res (exec-op actor "t8c" {:op :registry/amend :subject "app-1"
                                       :changed-fields {:address "新住所"}
                                       :effective-date "2026-07-03"} operator)]
@@ -242,7 +291,7 @@
   (testing "a registry_number alone is not enough -- jurisdiction must still have a citable spec-basis"
     (let [[db actor] (fresh)]
       (file-app-1! actor)
-      (drift-jurisdiction-to-atl! actor "t12b" "app-1")
+      (drift-jurisdiction-to-atl! db "app-1")
       (let [res (exec-op actor "t12c" {:op :registry/dissolve :subject "app-1"
                                        :reason "voluntary wind-up"
                                        :effective-date "2026-08-01"} operator)]

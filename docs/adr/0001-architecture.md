@@ -297,6 +297,42 @@ officer が後から `:hit` になる現実的経路をモデル化）。
 触れない住所変更 amendment は無関係な officer の状態に影響されず正常に
 escalate→commit）。47 tests / 234 assertions 全体 green、lint clean。
 
+## Addendum 9 (2026-07-03) -- 登記済み申請への intake 経由の無検閲書き換えを阻止（本 ADR 中で最も重大な修正）
+
+発見（実機再現で確認）: `:application/intake` は `formation.phase` の
+**どのフェーズの `:auto` にも入る唯一の op**（事前入力を速くする設計
+意図）であり、かつ governor 側にも「filed/dissolved 後は intake 禁止」
+という制約が一切無かった。結果、**登記済み(`:filed`)の申請に対して
+`:application/intake` で `capital`・`address`・`officers` を含む
+**あらゆるフィールドを、人間承認ゼロ・governor 検査ゼロで**即座に
+書き換えられた**。実機で検証: 資本金 1,000,000→1、住所を偽の値に、
+制裁対象の o-2 を officer に追加 -- すべて一発の intake で自動commit。
+これは Addendum 8 の「amendment 経由の officer 追加が sanctions/KYC を
+素通り」よりさらに広範な穴で、amend/dissolve が担保する actuation
+ゲート全体（spec-basis 引用・officer screening・人間承認）を**完全に
+迂回**できた。
+
+修正: `formation.governor/post-filing-intake-violations`（新規、HARD）
+を追加。対象申請が既に `:filed` または `:dissolved` なら `:application/
+intake` そのものを無条件で hold する（`:post-filing-intake-blocked`）。
+パッチの中身が無害に見えるかどうかは問わない -- 登記後の変更は必ず
+`:registry/amend` / `:registry/dissolve` を通す。
+
+副作用: 既存の `drift-jurisdiction-to-atl!` テストヘルパー（Addendum 6）
+が `:application/intake` 経由で法域drift を再現していたが、この修正で
+**その drift 自体がもう起こり得なくなった**（intake がそもそも hold
+される）。ヘルパーを `store/commit-record!` 直呼びに変更し、
+「actor の操作では届かないが、より低レイヤーのデータ不整合としては
+あり得る」シナリオとして再定義（Addendum 8 の `:hit` 直接 seed と同じ
+手法）。
+
+4 tests / 11 assertions を追加（資本金/住所/officer の smuggle 試行→
+hold・申請完全不変、無害に見えるパッチでも同様にhold、解散後も同様に
+保護、**登記前の intake は従来通り正常に auto-commit** することを確認）。
+51 tests / 245 assertions 全体 green、lint clean。実機再現スクリプトで
+修正前後の挙動差を確認済み（修正後は smuggled intake が申請を一切
+変更しないことを確認）。
+
 ## 代替案と不採用理由
 
 | 案 | 採否 | 理由 |
