@@ -18,22 +18,25 @@
                                  see a jurisdiction/officer determination
                                  before it becomes the basis for a filing).
 
-  `:filing/submit` and `:registry/amend` (and any future `:payment/remit`)
-  are deliberately ABSENT from every phase's `:auto` set, including phase
-  3 -- this is a permanent structural fact about this table, not a
-  rollout milestone still to come. A real government submission, a real
-  amendment filing, or a real fee payment is always a human call; see
-  README `Actuation`. The RegistrarGovernor's `:actuation` high-stakes
-  gate (formation.governor) enforces the same invariant independently --
-  two layers, not one, agree on this."
+  `:filing/submit`, `:registry/amend` and `:registry/dissolve` (and any
+  future `:payment/remit`) are deliberately ABSENT from every phase's
+  `:auto` set, including phase 3 -- this is a permanent structural fact
+  about this table, not a rollout milestone still to come. A real
+  government submission, a real amendment filing, a real dissolution
+  filing, or a real fee payment is always a human call; see README
+  `Actuation`. The RegistrarGovernor's `:actuation` high-stakes gate
+  (formation.governor) enforces the same invariant independently -- two
+  layers, not one, agree on this."
   )
 
 (def read-ops  #{:coverage/report})
-(def write-ops #{:application/intake :jurisdiction/assess :kyc/screen :filing/submit :registry/amend})
+(def write-ops #{:application/intake :jurisdiction/assess :kyc/screen
+                 :filing/submit :registry/amend :registry/dissolve})
 
-;; NOTE the invariant: :filing/submit and :registry/amend are members of
-;; `write-ops` (they are governor-gated like any write) but are NEVER a
-;; member of any phase's `:auto` set below. Do not add them there.
+;; NOTE the invariant: :filing/submit, :registry/amend and
+;; :registry/dissolve are members of `write-ops` (they are governor-gated
+;; like any write) but are NEVER a member of any phase's `:auto` set
+;; below. Do not add them there.
 (def phases
   "phase -> {:label .. :writes <ops allowed to write> :auto <ops allowed to
   auto-commit when governor-clean>}."

@@ -60,3 +60,22 @@
     (is (and (= (count hist) 1) (= (count hist2) 2)))
     (is (= (get-in hist2 [0 "kind"]) "incorporation-draft"))
     (is (= (get-in hist2 [1 "kind"]) "change-draft"))))
+
+(deftest dissolution-is-append-only-and-preserves-history
+  (let [inc (r/register-incorporation "Co" ["o"] 0 "a" "ad" "JPN" 2)
+        hist (r/append [] inc)
+        chg (r/register-change (get inc "registry_number") {"address" "new"} "2026-07-03")
+        hist2 (r/append hist chg)
+        dis (r/register-dissolution (get inc "registry_number") "voluntary wind-up" "2026-08-01")
+        hist3 (r/append hist2 dis)]
+    (is (= 3 (count hist3)))
+    (is (= (get-in hist3 [0 "kind"]) "incorporation-draft"))
+    (is (= (get-in hist3 [1 "kind"]) "change-draft"))
+    (is (= (get-in hist3 [2 "kind"]) "dissolution-draft"))
+    (is (= (get-in hist3 [2 "reason"]) "voluntary wind-up"))
+    (is (= (get-in hist3 [0 "record_id"]) (get-in hist3 [2 "registry_number"]))
+        "dissolution references the original incorporation's record_id (the registry_number) as ITS registry_number, never a new one")))
+
+(deftest dissolution-validation-rules
+  (is (thrown? Exception (r/register-dissolution "" "reason" "2026-08-01")))
+  (is (thrown? Exception (r/register-dissolution "JPN-00000001" "" "2026-08-01"))))

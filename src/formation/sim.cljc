@@ -2,9 +2,10 @@
   "Demo driver -- `clojure -M:dev:run`. Walks a clean application through
   intake -> jurisdiction assessment -> KYC screening -> filing proposal
   (always escalates) -> human approval -> commit -> a post-incorporation
-  amendment (also always escalates), then shows two HARD holds (a
-  sanctions hit, a fabricated jurisdiction) that never reach a human at
-  all, and prints the audit ledger + the draft registry record history."
+  amendment -> a dissolution (both also always escalate), then shows
+  three HARD holds (a sanctions hit, a fabricated jurisdiction, a
+  double-dissolution attempt) that never reach a human at all, and prints
+  the audit ledger + the draft registry record history."
   (:require [langgraph.graph :as g]
             [formation.store :as store]
             [formation.operation :as op]))
@@ -45,6 +46,17 @@
       (println r)
       (println "-- human operator approves --")
       (println (approve! actor "t4b")))
+
+    (println "== registry/dissolve app-1 (always escalates -- actuation) ==")
+    (let [r (exec! actor "t4c" {:op :registry/dissolve :subject "app-1"
+                               :reason "voluntary wind-up" :effective-date "2026-12-01"} operator)]
+      (println r)
+      (println "-- human operator approves --")
+      (println (approve! actor "t4c")))
+
+    (println "== registry/dissolve app-1 AGAIN (already dissolved -> HARD hold, never reaches a human) ==")
+    (println (exec! actor "t4d" {:op :registry/dissolve :subject "app-1"
+                                 :reason "second attempt" :effective-date "2027-01-01"} operator))
 
     (println "== kyc/screen o-2 (sanctions hit -> HARD hold, never reaches a human) ==")
     (println (exec! actor "t5" {:op :kyc/screen :subject "o-2"} operator))

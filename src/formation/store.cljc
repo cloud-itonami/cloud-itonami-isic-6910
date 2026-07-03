@@ -93,6 +93,21 @@
     {:result result
      :app-patch changed-fields}))
 
+(defn- dissolve!
+  "Backend-agnostic `:registry/dissolve-submitted` -- looks up the
+  application via the protocol, drafts the append-only dissolution record
+  via `formation.registry/register-dissolution`, and returns {:result ..
+  :app-patch ..} for the caller to persist. The dissolution record is
+  APPENDED to registry-history; the original incorporation record (and
+  any prior amendments) are never overwritten -- dissolution is a status
+  change plus one more appended record, not a deletion."
+  [s app-id reason effective-date]
+  (let [app (application s app-id)
+        result (registry/register-dissolution
+                (:registry-number app) reason effective-date)]
+    {:result result
+     :app-patch {:status :dissolved}}))
+
 ;; ----------------------------- MemStore (default) -----------------------------
 
 (defrecord MemStore [a]
@@ -131,6 +146,16 @@
       (let [app-id (first path)
             {:keys [changed-fields effective-date]} value
             {:keys [result app-patch]} (amend! s app-id changed-fields effective-date)]
+        (swap! a (fn [state]
+                   (-> state
+                       (update-in [:applications app-id] merge app-patch)
+                       (update :registry registry/append result))))
+        result)
+
+      :registry/dissolve-submitted
+      (let [app-id (first path)
+            {:keys [reason effective-date]} value
+            {:keys [result app-patch]} (dissolve! s app-id reason effective-date)]
         (swap! a (fn [state]
                    (-> state
                        (update-in [:applications app-id] merge app-patch)
@@ -264,6 +289,15 @@
       (let [app-id (first path)
             {:keys [changed-fields effective-date]} value
             {:keys [result app-patch]} (amend! s app-id changed-fields effective-date)]
+        (d/transact! conn
+                     [(app->tx (assoc app-patch :id app-id))
+                      {:registry/seq (count (registry-history s)) :registry/record (enc (get result "record"))}])
+        result)
+
+      :registry/dissolve-submitted
+      (let [app-id (first path)
+            {:keys [reason effective-date]} value
+            {:keys [result app-patch]} (dissolve! s app-id reason effective-date)]
         (d/transact! conn
                      [(app->tx (assoc app-patch :id app-id))
                       {:registry/seq (count (registry-history s)) :registry/record (enc (get result "record"))}])

@@ -150,6 +150,59 @@
         (is (not= "新住所" (:address (store/application db "app-1"))))
         (is (= before-history (store/registry-history db)) "nothing appended on reject")))))
 
+(deftest dissolution-without-a-filed-application-is-held
+  (testing "an application with no registry_number has nothing to dissolve -> HOLD"
+    (let [[db actor] (fresh)
+          res (exec-op actor "t12" {:op :registry/dissolve :subject "app-1"
+                                    :reason "voluntary wind-up"
+                                    :effective-date "2026-08-01"} operator)]
+      (is (= :hold (get-in res [:state :disposition])))
+      (is (some #{:no-registry-number} (-> (store/ledger db) first :basis)))
+      (is (empty? (store/registry-history db)) "no dissolution drafted"))))
+
+(deftest dissolution-always-escalates-then-human-decides
+  (testing "a clean dissolution on a filed application still ALWAYS interrupts -- actuation is never auto"
+    (let [[db actor] (fresh)]
+      (file-app-1! actor)
+      (let [r1 (exec-op actor "t13" {:op :registry/dissolve :subject "app-1"
+                                     :reason "voluntary wind-up"
+                                     :effective-date "2026-08-01"} operator)]
+        (is (= :interrupted (:status r1)) "pauses for human approval even when governor-clean")
+        (let [r2 (approve! actor "t13")]
+          (is (= :commit (get-in r2 [:state :disposition])))
+          (is (= :dissolved (:status (store/application db "app-1"))) "application marked dissolved")
+          (is (= 2 (count (store/registry-history db)))
+              "original incorporation record + one appended dissolution")
+          (is (= "dissolution-draft" (get (last (store/registry-history db)) "kind")))))))
+  (testing "reject -> hold, application not dissolved"
+    (let [[db actor] (fresh)]
+      (file-app-1! actor)
+      (exec-op actor "t14" {:op :registry/dissolve :subject "app-1"
+                            :reason "voluntary wind-up"
+                            :effective-date "2026-08-01"} operator)
+      (let [r2 (g/run* actor {:approval {:status :rejected :by "op-1"}}
+                       {:thread-id "t14" :resume? true})]
+        (is (= :hold (get-in r2 [:state :disposition])))
+        (is (not= :dissolved (:status (store/application db "app-1"))))))))
+
+(deftest double-dissolution-is-held
+  (testing "an already-dissolved application cannot be dissolved again -> HOLD, un-overridable"
+    (let [[db actor] (fresh)]
+      (file-app-1! actor)
+      (exec-op actor "t15a" {:op :registry/dissolve :subject "app-1"
+                             :reason "voluntary wind-up"
+                             :effective-date "2026-08-01"} operator)
+      (approve! actor "t15a")
+      (let [history-after-first (store/registry-history db)
+            res (exec-op actor "t15b" {:op :registry/dissolve :subject "app-1"
+                                       :reason "second attempt"
+                                       :effective-date "2026-09-01"} operator)]
+        (is (= :hold (get-in res [:state :disposition])) "settles immediately, no interrupt")
+        (is (not= :interrupted (:status res)))
+        (is (some #{:already-dissolved} (-> (store/ledger db) last :basis)))
+        (is (= history-after-first (store/registry-history db))
+            "no second dissolution record appended")))))
+
 (deftest every-decision-leaves-one-ledger-fact
   (testing "write-only-through-ledger: N operations -> N ledger facts"
     (let [[db actor] (fresh)]

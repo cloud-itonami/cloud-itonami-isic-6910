@@ -4,13 +4,14 @@
   It normalizes customer intake, drafts a per-jurisdiction document
   checklist + fee estimate, screens officers against a KYC/sanctions
   signal, drafts the filing-submission action, and drafts
-  post-incorporation amendments (変更登記). CRITICAL: it is a
-  smart-but-untrusted advisor. It returns a *proposal* (with a rationale +
-  the fields it cited), never a committed record or a real government
-  submission. Every output is censored downstream by
+  post-incorporation amendments (変更登記) and dissolutions (解散/清算).
+  CRITICAL: it is a smart-but-untrusted advisor. It returns a *proposal*
+  (with a rationale + the fields it cited), never a committed record or a
+  real government submission. Every output is censored downstream by
   `formation.governor` before anything touches the SSoT, and
-  `:filing/submit` / `:registry/amend` / `:payment/remit` proposals NEVER
-  auto-commit at any phase -- see README `Actuation`.
+  `:filing/submit` / `:registry/amend` / `:registry/dissolve` /
+  `:payment/remit` proposals NEVER auto-commit at any phase -- see README
+  `Actuation`.
 
   Like `talent.hrllm` / `itonami.opsllm`, this is a deterministic mock so
   the actor graph runs offline and the governor contract is exercised
@@ -165,6 +166,37 @@
        :stake      :actuation
        :confidence 0.2})))
 
+(defn- propose-dissolution
+  "Draft a company dissolution (解散/清算). ALWAYS `:stake :actuation` --
+  submitted to the same real government registry as the original filing;
+  gated exactly like `:filing/submit` / `:registry/amend`. A target that
+  was never filed has nothing to dissolve, and an already-dissolved
+  target cannot be dissolved twice -- both are the governor's hard
+  `:registry/dissolve`-specific checks."
+  [db {:keys [subject reason effective-date]}]
+  (let [app (store/application db subject)]
+    (cond
+      (nil? (:registry-number app))
+      {:summary "未登記のため解散できません" :rationale "registry_number が無い"
+       :cites [] :effect :registry/dissolve-submitted
+       :value {:application-id subject :reason reason :effective-date effective-date}
+       :stake :actuation :confidence 0.2}
+
+      (= :dissolved (:status app))
+      {:summary (str (:entity-name app) " は既に解散済みです") :rationale "二重解散の防止"
+       :cites [] :effect :registry/dissolve-submitted
+       :value {:application-id subject :reason reason :effective-date effective-date}
+       :stake :actuation :confidence 0.2}
+
+      :else
+      {:summary    (str (:entity-name app) " (" (:registry-number app) ") の解散案: " reason)
+       :rationale  (str "既存登記記録 " (:registry-number app) " への追記型解散記録。")
+       :cites      [(:registry-number app)]
+       :effect     :registry/dissolve-submitted
+       :value      {:application-id subject :reason reason :effective-date effective-date}
+       :stake      :actuation
+       :confidence 0.9})))
+
 (defn infer
   "Route a request to the right proposal generator.
   request: {:op kw :subject id ...op-specific...}"
@@ -175,6 +207,7 @@
     :kyc/screen           (screen-kyc db request)
     :filing/submit        (propose-filing db request)
     :registry/amend       (propose-amendment db request)
+    :registry/dissolve    (propose-dissolution db request)
     {:summary "未対応の操作" :rationale (str op) :cites []
      :effect :noop :stake nil :confidence 0.0}))
 
@@ -193,7 +226,7 @@
        "EDNだけを出力します。\n"
        "キー: :summary(人向けドラフト) :rationale(根拠/必ず事実から) "
        ":cites(使った事実キーのベクタ) "
-       ":effect(:application/upsert|:assessment/set|:kyc/set|:filing/mark-submitted|:registry/amend-submitted) "
+       ":effect(:application/upsert|:assessment/set|:kyc/set|:filing/mark-submitted|:registry/amend-submitted|:registry/dissolve-submitted) "
        ":stake(:actuation か nil) :confidence(0..1)。\n"
        "重要: 登録されていない法域の要件を絶対に創作してはいけません。"
        "spec-basisが無い場合は :cites を空にし confidence を上げないこと。"))
@@ -205,6 +238,7 @@
     :filing/submit       {:application (store/application st subject)
                           :assessment (store/assessment-of st subject)}
     :registry/amend      {:application (store/application st subject)}
+    :registry/dissolve   {:application (store/application st subject)}
     {:application (store/application st subject)}))
 
 (defn- parse-proposal

@@ -6,14 +6,14 @@
   proposal and fall back to HOLD -- the company-formation analog of
   robotaxi's Minimal Risk Condition and gftd-talent-actor's PolicyGovernor.
 
-  Six checks, in priority order. The first four are HARD violations: a
+  Seven checks, in priority order. The first five are HARD violations: a
   human approver CANNOT override them (you don't get to approve your way
   past a sanctions hit or a fabricated legal requirement). The last two are
   SOFT: they ask a human to look (low confidence / actuation), and the
   human may approve -- but see `formation.phase`: for `:stake :actuation`
-  (a real government submission, amendment filing, or fee payment) NO
-  phase ever allows auto-commit either. Two independent layers agree that
-  actuation is always a human call.
+  (a real government submission, amendment filing, dissolution filing, or
+  fee payment) NO phase ever allows auto-commit either. Two independent
+  layers agree that actuation is always a human call.
 
     1. Spec-basis        -- did the jurisdiction proposal cite an OFFICIAL
                              source (`formation.facts`), or invent one?
@@ -24,8 +24,12 @@
     4. Amendment target   -- for an amendment proposal, is there an
                              existing registry number to amend, and is the
                              amendment actually non-empty?
-    5. Confidence floor   -- LLM confidence below threshold -> escalate.
-    6. Actuation gate     -- :stake :actuation -> always escalate; never
+    5. Dissolution target -- for a dissolution proposal, is there an
+                             existing registry number to dissolve, and is
+                             the entity not ALREADY dissolved (no double
+                             dissolution)?
+    6. Confidence floor   -- LLM confidence below threshold -> escalate.
+    7. Actuation gate     -- :stake :actuation -> always escalate; never
                              auto, at any phase (structural, not a policy
                              toggle)."
   (:require [formation.facts :as facts]
@@ -93,6 +97,21 @@
         (conj {:rule :empty-amendment
                :detail "変更内容が空の変更登記提案"})))))
 
+(defn- dissolution-violations
+  "For `:registry/dissolve`, the target must already carry a registry
+  number (you cannot dissolve a filing that was never submitted), and it
+  must not already be dissolved -- both HARD."
+  [{:keys [op subject]} st]
+  (when (= op :registry/dissolve)
+    (let [app (store/application st subject)]
+      (cond-> []
+        (nil? (:registry-number app))
+        (conj {:rule :no-registry-number
+               :detail "初回登記(registry_number)が無い申請には解散登記できない"})
+        (= :dissolved (:status app))
+        (conj {:rule :already-dissolved
+               :detail "既に解散済みの申請への二重解散提案"})))))
+
 (defn check
   "Censors a Registrar-LLM proposal against the governor rules. Returns
    {:ok? bool :violations [..] :confidence c :escalate? bool :high-stakes? bool
@@ -107,7 +126,8 @@
                    (concat (spec-basis-violations request proposal)
                            (sanctions-violations request proposal st)
                            (document-violations request st)
-                           (amendment-violations request proposal st)))
+                           (amendment-violations request proposal st)
+                           (dissolution-violations request st)))
         conf (:confidence proposal 0.0)
         low? (< conf confidence-floor)
         stakes? (boolean (high-stakes (:stake proposal)))

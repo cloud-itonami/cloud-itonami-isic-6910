@@ -43,7 +43,7 @@ formation.operation/build          (OperationActor: langgraph-clj StateGraph)
 
 ## 4. RegistrarGovernor（独立検閲層）
 
-6チェック、優先順位順。最初の4つは HARD（人間が承認で上書き不可）:
+7チェック、優先順位順。最初の5つは HARD（人間が承認で上書き不可）:
 
 1. **spec-basis** -- `:jurisdiction/assess` / `:filing/submit` の提案が
    `formation.facts` の公式ソースを引用しているか。引用が無ければ
@@ -57,14 +57,16 @@ formation.operation/build          (OperationActor: langgraph-clj StateGraph)
 4. **amendment-target** -- `:registry/amend` の対象申請に registry_number
    （= 初回登記済み）があるか、かつ変更内容が空でないか。未登記への変更登記
    提案・空の変更提案はどちらも hold。
+5. **dissolution-target** -- `:registry/dissolve` の対象申請に
+   registry_number があるか、かつ既に解散済み（二重解散）でないか。
 
 残り2つは SOFT（人間が承認すればよい）:
 
-5. **confidence floor** -- confidence が閾値未満なら escalate。
-6. **actuation gate** -- `:stake :actuation`（実際の政府提出・実際の変更
-   登記提出・実際の手数料送金）は常に escalate。**`formation.phase` の
-   どのフェーズの `:auto` 集合にも `:filing/submit` / `:registry/amend`
-   を含めない**ことと合わせて、
+6. **confidence floor** -- confidence が閾値未満なら escalate。
+7. **actuation gate** -- `:stake :actuation`（実際の政府提出・実際の変更
+   登記提出・実際の解散登記提出・実際の手数料送金）は常に escalate。
+   **`formation.phase` のどのフェーズの `:auto` 集合にも `:filing/submit`
+   / `:registry/amend` / `:registry/dissolve` を含めない**ことと合わせて、
    「実アクチュエーションは常に人間が行う」という不変条件を governor と
    phase の2層で独立に強制する。
 
@@ -81,27 +83,32 @@ fact・registry record）を EDN 文字列として保持する -- `talent.store
 ## 6. LEI / registry ドラフト record
 
 `formation.registry` は ISO 17442 LEI 発行（ISO 7064 MOD 97-10 チェック
-digit を実装）+ registry-number 採番 + 追記型 amendment record を提供する。
-`matsurigoto`（etzhayyim/root, ADR-2606062300）の corp-registry モジュールの
-ポートで、スペック数学（LEI/MOD-97-10）はどの principal がその法域の代理を
-行うかに依存しないため共有した。**このモジュールが返すのは常にドラフト
-（`"proof" nil`, `"issued_by_registry" false`）であり、実際の政府登記所が
-発行した証明書ではない。** `register-change`（変更登記）は `formation.store`
-の `:registry/amend-submitted` effect から呼ばれ、元の incorporation record
-を書き換えず registry-history に追記する（G5 style append-only）。
+digit を実装）+ registry-number 採番 + 追記型 amendment/dissolution record
+を提供する。`matsurigoto`（etzhayyim/root, ADR-2606062300）の corp-registry
+モジュールのポートで、スペック数学（LEI/MOD-97-10）はどの principal が
+その法域の代理を行うかに依存しないため共有した。**このモジュールが返すのは
+常にドラフト（`"proof" nil`, `"issued_by_registry" false`）であり、実際の
+政府登記所が発行した証明書ではない。** `register-change`（変更登記）/
+`register-dissolution`（解散登記）はそれぞれ `formation.store` の
+`:registry/amend-submitted` / `:registry/dissolve-submitted` effect から
+呼ばれ、元の incorporation record を書き換えず registry-history に追記する
+（G5 style append-only）。解散も「削除」ではなく「もう1件の追記」であり、
+履歴は消えない。
 
 ## 7. デモ（`clojure -M:dev:run`）
 
 `formation.sim` は 1件のクリーンな申請（intake → assess → screen → filing
-提案 → 人間承認 → commit）と、2件の HARD hold ケース（制裁ヒット / 法域
-要件の捏造）を通し、台帳とドラフト registry record を出力する。
+提案 → 人間承認 → commit → 変更登記提案 → 承認 → 解散提案 → 承認）と、
+3件の HARD hold ケース（二重解散 / 制裁ヒット / 法域要件の捏造）を通し、
+台帳とドラフト registry record の履歴（incorporation → change → dissolution
+の3件、いずれも消えない）を出力する。
 
 ## 8. テスト（`clojure -M:dev:test`）
 
 - `governor_contract_test.clj` -- 「Registrar-LLM は governor が拒否する
   record を決してファイル/送金しない」契約。
-- `phase_test.clj` -- 「`:filing/submit` / `:registry/amend` はどのフェーズの
-  `:auto` にも含まれない」構造不変条件。
+- `phase_test.clj` -- 「`:filing/submit` / `:registry/amend` /
+  `:registry/dissolve` はどのフェーズの `:auto` にも含まれない」構造不変条件。
 - `registry_test.clj` -- LEI/MOD-97-10 の conformance（matsurigoto 由来）。
 - `facts_test.clj` -- 法域カバレッジは常に正直に報告される
   （無いものを「対応済み」と報告しない）。

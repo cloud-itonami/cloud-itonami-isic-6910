@@ -135,6 +135,23 @@
              "effective_date" effective-date
              "immutable" true}})
 
+(defn register-dissolution
+  "Append-only dissolution (解散/清算) draft. Terminal event for the entity,
+  but the registry-number and its history are never deleted (G5,
+  append-only) -- dissolution is one more appended record, same as an
+  amendment."
+  [registry-number reason effective-date]
+  (when-not (and registry-number (not= registry-number ""))
+    (throw (ex-info "dissolve: registry_number required" {})))
+  (when-not (and reason (not= reason ""))
+    (throw (ex-info "dissolve: reason required" {})))
+  {"record" {"record_id" (str registry-number "#dissolved@" effective-date)
+             "kind" "dissolution-draft"
+             "registry_number" registry-number
+             "reason" reason
+             "effective_date" effective-date
+             "immutable" true}})
+
 (defn append
   "Append a registry record, returning a NEW list (never mutate history in place)."
   [history result]
