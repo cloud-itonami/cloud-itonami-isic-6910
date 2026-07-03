@@ -120,7 +120,7 @@ full architecture and decision record.
 | `src/formation/registry.cljc` | ISO 17442 LEI issuance (ISO 7064 MOD 97-10) + incorporation/amendment/dissolution draft records -- ported from `matsurigoto`'s corp-registry (etzhayyim/root, ADR-2606062300) |
 | `src/formation/facts.cljc` | Per-jurisdiction requirement catalog with an official spec-basis citation per entry, honest coverage reporting |
 | `src/formation/registrarllm.cljc` | **Registrar-LLM Advisor** -- `mock-advisor` ‖ `llm-advisor`; intake/assessment/KYC/filing/amendment/dissolution proposals |
-| `src/formation/governor.cljc` | **RegistrarGovernor** -- effect-matches-op · spec-basis · sanctions hold · KYC-complete · document-complete · post-filing-intake-block · amendment-target · dissolution-target · confidence floor · actuation gate |
+| `src/formation/governor.cljc` | **RegistrarGovernor** -- effect-matches-op · spec-basis · sanctions hold · KYC-complete · document-complete · post-filing-intake-block · intake-fabrication · amendment-target · dissolution-target · confidence floor · actuation gate |
 | `src/formation/phase.cljc` | **Phase 0→3** -- read-only → assisted intake → assisted assess/screen → supervised (filing always human) |
 | `src/formation/operation.cljc` | **OperationActor** -- langgraph-clj StateGraph |
 | `src/formation/sim.cljc` | demo driver |

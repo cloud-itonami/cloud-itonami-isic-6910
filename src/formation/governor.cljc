@@ -6,7 +6,7 @@
   proposal and fall back to HOLD -- the company-formation analog of
   robotaxi's Minimal Risk Condition and gftd-talent-actor's PolicyGovernor.
 
-  Ten checks, in priority order. The first eight are HARD violations: a
+  Eleven checks, in priority order. The first nine are HARD violations: a
   human approver CANNOT override them (you don't get to approve your way
   past a sanctions hit or a fabricated legal requirement). The last two are
   SOFT: they ask a human to look (low confidence / actuation), and the
@@ -55,15 +55,29 @@
                              screen officers and always require a human.
                              Without this, intake is an unguarded
                              backdoor around the entire actuation gate.
-    7. Amendment target   -- for an amendment proposal, is there an
-                             existing registry number to amend, and is the
-                             amendment actually non-empty?
-    8. Dissolution target -- for a dissolution proposal, is there an
+    7. Intake fabrication -- even a PRE-filing intake patch is not a blank
+                             cheque: it may never set :registry-number/
+                             :lei (those are assigned ONLY by a real
+                             filing), never set :status to :filed/
+                             :dissolved (those are terminal actuation
+                             states reached ONLY via the internal
+                             app-patch a real filing/dissolution applies
+                             itself), and its own patch :id (if present)
+                             must match the request's :subject (otherwise
+                             a decoy, never-filed subject can pass every
+                             check while the patch's real :id target gets
+                             silently rewritten).
+    8. Amendment target   -- for an amendment proposal, is there an
+                             existing registry number to amend, is the
+                             amendment actually non-empty, and does it stay
+                             within `amendable-fields` (never :status/
+                             :jurisdiction/:registry-number/:lei/:id)?
+    9. Dissolution target -- for a dissolution proposal, is there an
                              existing registry number to dissolve, and is
                              the entity not ALREADY dissolved (no double
                              dissolution)?
-    9. Confidence floor   -- LLM confidence below threshold -> escalate.
-   10. Actuation gate     -- :stake :actuation -> always escalate; never
+   10. Confidence floor   -- LLM confidence below threshold -> escalate.
+   11. Actuation gate     -- :stake :actuation -> always escalate; never
                              auto, at any phase (structural, not a policy
                              toggle)."
   (:require [formation.facts :as facts]
@@ -216,6 +230,54 @@
   scrutiny via `officers-at-stake`."
   #{:entity-name :address :capital :articles :officers})
 
+(defn- intake-fabrication-violations
+  "HARD: `:application/intake` is the ONE op any phase ever auto-commits
+  (formation.phase) -- zero human approval, ever. Its patch content needs
+  the same structural limits `:registry/amend` gets from
+  `amendable-fields` (Addendum 14), but pre-filing intake has its OWN
+  failure modes:
+
+    - `:registry-number` / `:lei` are assigned ONLY by a real
+      `:filing/submit` (`formation.store/file!`). An intake patch setting
+      either fabricates a complete fake filing -- fake LEI, fake
+      registry-number, ZERO registry-history entry, zero spec-basis, zero
+      document check, zero KYC screening, zero human ever involved.
+    - `:status :filed` / `:dissolved` are terminal actuation states
+      reached ONLY via the internal app-patch that `:filing/mark-
+      submitted` / `:registry/dissolve-submitted` apply themselves. An
+      intake patch claiming either fabricates the actuation event itself,
+      and also flips on `post-filing-intake-violations`' own protection --
+      making the fabrication permanent and indistinguishable from a real
+      filing to every later check.
+    - patch's own `:id`, if present, must equal the request's `:subject`.
+      `post-filing-intake-violations` (and every other check here) looks
+      up the application via the REQUEST's `:subject`, but
+      `formation.store`'s `:application/upsert` keys the actual write off
+      `(:id patch)`, not the request path. A request declaring a decoy,
+      never-filed `:subject` while `patch`'s `:id` names a DIFFERENT,
+      already-filed application lets the decoy's clean status pass every
+      check while the real target gets silently rewritten.
+
+  All three verified by direct exploitation (ADR Addendum 15) before this
+  check existed: a from-scratch application with no assessment, no KYC,
+  and phase-3 auto-commit alone produced a fully `:filed` record with a
+  fabricated registry-number and LEI in one `:application/intake` call,
+  and a decoy-subject patch rewrote an unrelated already-filed
+  application's capital and address."
+  [{:keys [op subject]} proposal]
+  (when (= op :application/intake)
+    (let [patch (:value proposal)]
+      (cond-> []
+        (some #(contains? patch %) [:registry-number :lei])
+        (conj {:rule :intake-forbidden-field
+               :detail "intake で registry-number/lei を設定することはできない（実際の filing でのみ発行される）"})
+        (contains? #{:filed :dissolved} (:status patch))
+        (conj {:rule :intake-forbidden-status
+               :detail "intake で :status を :filed/:dissolved にすることはできない（実際の filing/dissolve でのみ到達する終端状態）"})
+        (and (contains? patch :id) (not= (:id patch) subject))
+        (conj {:rule :intake-subject-mismatch
+               :detail "patch の :id がリクエストの subject と一致しない"})))))
+
 (defn- amendment-violations
   "For `:registry/amend`, the target application must already carry a
   registry number (you cannot amend a filing that was never submitted),
@@ -279,6 +341,7 @@
                            (kyc-completeness-violations request proposal st)
                            (document-violations request st)
                            (post-filing-intake-violations request st)
+                           (intake-fabrication-violations request proposal)
                            (amendment-violations request proposal st)
                            (dissolution-violations request st)))
         conf (:confidence proposal 0.0)

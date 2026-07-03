@@ -183,6 +183,49 @@
       (is (= :commit (get-in res [:state :disposition])))
       (is (= 2000000 (:capital (store/application db "app-1")))))))
 
+(deftest intake-cannot-fabricate-a-filed-status-with-a-fake-registry-number-and-lei
+  (testing "the ONE op that auto-commits with ZERO human approval at any phase must not be
+            able to mint a completely fake 'filed' company out of thin air -- no assessment,
+            no KYC, no document check, no spec-basis, no human, ever (ADR Addendum 15: verified
+            by direct exploitation that before this fix this committed instantly at phase 3)"
+    (let [[db actor] (fresh)
+          before (store/application db "app-1")
+          res (exec-op actor "fab" {:op :application/intake :subject "app-1"
+                                    :patch {:id "app-1" :status :filed
+                                           :registry-number "JPN-99999999"
+                                           :lei "FAKE0000000000000099"}} operator)]
+      (is (= :hold (get-in res [:state :disposition])) "settles immediately, no interrupt, no auto-commit")
+      (is (not= :interrupted (:status res)))
+      (is (some #{:intake-forbidden-field} (-> (store/ledger db) last :basis)))
+      (is (some #{:intake-forbidden-status} (-> (store/ledger db) last :basis)))
+      (is (= before (store/application db "app-1")) "application completely unchanged")
+      (is (empty? (store/registry-history db)) "no registry record fabricated"))))
+
+(deftest intake-cannot-target-a-different-application-than-its-declared-subject
+  (testing "a request declaring subject app-2 (never filed, so post-filing-intake-violations
+            passes it) whose patch's OWN :id names a DIFFERENT, already-filed application must
+            not silently rewrite that other application -- formation.store's :application/upsert
+            keys off patch's :id, not the request's declared subject (ADR Addendum 15: verified
+            by direct exploitation this rewrote an unrelated already-filed app's capital/address)"
+    (let [[db actor] (fresh)]
+      (file-app-1! actor)
+      (let [before (store/application db "app-1")
+            res (exec-op actor "confuse" {:op :application/intake :subject "app-2"
+                                          :patch {:id "app-1" :capital 1
+                                                 :address "REWRITTEN VIA SUBJECT CONFUSION"}} operator)]
+        (is (= :hold (get-in res [:state :disposition])))
+        (is (some #{:intake-subject-mismatch} (-> (store/ledger db) last :basis)))
+        (is (= before (store/application db "app-1")) "app-1 completely unchanged")))))
+
+(deftest intake-setting-status-to-ready-is-still-unaffected
+  (testing "the new intake-fabrication check only rejects :filed/:dissolved -- ordinary
+            pre-filing status transitions (e.g. :ready) still auto-commit exactly as before"
+    (let [[db actor] (fresh)
+          res (exec-op actor "still-fine" {:op :application/intake :subject "app-1"
+                                           :patch {:id "app-1" :status :ready}} operator)]
+      (is (= :commit (get-in res [:state :disposition])))
+      (is (= :ready (:status (store/application db "app-1")))))))
+
 (deftest amendment-without-a-filed-application-is-held
   (testing "an application with no registry_number has nothing to amend -> HOLD"
     (let [[db actor] (fresh)

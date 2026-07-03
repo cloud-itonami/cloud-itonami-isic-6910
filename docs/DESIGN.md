@@ -43,7 +43,7 @@ formation.operation/build          (OperationActor: langgraph-clj StateGraph)
 
 ## 4. RegistrarGovernor（独立検閲層）
 
-10チェック、優先順位順。最初の8つは HARD（人間が承認で上書き不可）:
+11チェック、優先順位順。最初の9つは HARD（人間が承認で上書き不可）:
 
 1. **effect-matches-op** -- 提案の `:effect`（commit 時に実際にSSoTへ
    書き込まれる内容）が、リクエストの `:op` に紐づく**唯一正当な**
@@ -88,7 +88,17 @@ formation.operation/build          (OperationActor: langgraph-clj StateGraph)
    迂回するバックドアになる。修正は常に「`:registry/amend`（または
    `:registry/dissolve`）を使う」であり、「intake を承認する」ではない
    （そもそも intake は escalate すらせず即 hold のため承認経路が無い）。
-7. **amendment-target** -- `:registry/amend` の対象申請に registry_number
+7. **intake-fabrication** -- filing 前の intake だからといって白紙委任
+   ではない。`:registry-number`/`:lei`（実際の filing でのみ発行される）
+   の設定、`:status` を `:filed`/`:dissolved`（実際の filing/dissolve
+   でのみ到達する終端状態）にすること、patch の `:id` がリクエストの
+   `:subject` と食い違うこと -- いずれも hold。最後のケースが無いと、
+   `post-filing-intake-violations` は REQUEST の `subject` から申請を
+   引くのに `formation.store` の `:application/upsert` は patch 自身の
+   `:id` を書き込み先にするという不一致を突いて、「まだ filing していない
+   おとりの subject」を宣言しつつ patch.id で**別の、既に filed 済みの
+   申請**を書き換えられてしまう（Addendum 15）。
+8. **amendment-target** -- `:registry/amend` の対象申請に registry_number
    （= 初回登記済み）があるか、かつ変更内容が空でないか、かつ
    **`changed-fields` が `amendable-fields` allowlist（`:entity-name`
    `:address` `:capital` `:articles` `:officers`）以外のフィールドに触れて
@@ -99,13 +109,13 @@ formation.operation/build          (OperationActor: langgraph-clj StateGraph)
    検査（spec-basis、二重解散防止）を一切通さずに解散状態へ書き換えられ、
    registry-history には単なる change-draft しか残らない -- 監査台帳が
    実態と食い違う（Addendum 14）。
-8. **dissolution-target** -- `:registry/dissolve` の対象申請に
+9. **dissolution-target** -- `:registry/dissolve` の対象申請に
    registry_number があるか、かつ既に解散済み（二重解散）でないか。
 
 残り2つは SOFT（人間が承認すればよい）:
 
-9. **confidence floor** -- confidence が閾値未満なら escalate。
-10. **actuation gate** -- `:stake :actuation`（実際の政府提出・実際の変更
+10. **confidence floor** -- confidence が閾値未満なら escalate。
+11. **actuation gate** -- `:stake :actuation`（実際の政府提出・実際の変更
    登記提出・実際の解散登記提出・実際の手数料送金）は常に escalate。
    **`formation.phase` のどのフェーズの `:auto` 集合にも `:filing/submit`
    / `:registry/amend` / `:registry/dissolve` を含めない**ことと合わせて、
