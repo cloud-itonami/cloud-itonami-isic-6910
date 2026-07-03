@@ -117,12 +117,13 @@ full architecture and decision record.
 
 `formation.facts/coverage` reports how many requested jurisdictions
 actually have an official spec-basis in `formation.facts/catalog` --
-currently 10 seeded (JPN, USA-DE, GBR, DEU, EST, KOR, IND, SGP, NZL, CAN)
-out of ~194 jurisdictions worldwide. This is a starting catalog to prove
-the governor contract end-to-end, not a claim of global coverage. Adding a
-jurisdiction is additive: one map entry in `formation.facts/catalog`,
-citing a real official source -- never fabricate a jurisdiction's
-requirements to make coverage look bigger.
+currently 21 seeded (JPN, USA-DE, GBR, DEU, EST, KOR, IND, SGP, NZL, CAN,
+FRA, NOR, DNK, FIN, BEL, CZE, AUS, ZAF, CHE, NLD, ISR) out of ~194
+jurisdictions worldwide. This is a starting catalog to prove the governor
+contract end-to-end, not a claim of global coverage. Adding a jurisdiction
+is additive: one map entry in `formation.facts/catalog`, citing a real
+official source -- never fabricate a jurisdiction's requirements to make
+coverage look bigger.
 
 ## License
 

@@ -111,6 +111,16 @@ activities) -- 会社設立代行はこの分類に含まれる。
 - (-) 実際の政府ポータル統合・実際の決済統合・実際のKYC/制裁スクリーニング
   プロバイダ統合は、この OSS actor の対象外（各 operator の責任）。
 
+## Addendum (2026-07-03) -- coverage 拡大 10→21法域
+
+R0 の初期10法域（JPN/USA-DE/GBR/DEU/EST/KOR/IND/SGP/NZL/CAN）に、
+FRA/NOR/DNK/FIN/BEL/CZE/AUS/ZAF/CHE/NLD/ISR の11法域を追加した
+（`formation.facts/catalog`、各エントリは公式ソースを引用、捏造なし）。
+`test/formation/facts_test.clj` は変更なしで green（既存テストは特定の
+jurisdiction 集合に依存しないため）。上記「帰結」の「10法域」という記述は
+追加当時の事実として保持し書き換えない -- 現在の法域数は README /
+`formation.facts/coverage` を参照。
+
 ## 代替案と不採用理由
 
 | 案 | 採否 | 理由 |
