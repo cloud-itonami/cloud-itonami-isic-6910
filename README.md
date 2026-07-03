@@ -111,7 +111,7 @@ full architecture and decision record.
 | `src/formation/phase.cljc` | **Phase 0→3** -- read-only → assisted intake → assisted assess/screen → supervised (filing always human) |
 | `src/formation/operation.cljc` | **OperationActor** -- langgraph-clj StateGraph |
 | `src/formation/sim.cljc` | demo driver |
-| `test/formation/*_test.clj` | governor contract · phase invariants · LEI conformance · facts coverage · MemStore ≡ DatomicStore parity |
+| `test/formation/*_test.clj` | governor contract · phase invariants · LEI conformance · facts coverage · MemStore ≡ DatomicStore parity · real-LLM advisor (mock-model) |
 
 ## Jurisdiction coverage (honest)
 
