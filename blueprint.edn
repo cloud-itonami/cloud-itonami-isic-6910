@@ -1,0 +1,10 @@
+{:itonami.blueprint/id "cloud-itonami-M6910"
+ :itonami.blueprint/name "Global Incorporation Actor"
+ :itonami.blueprint/isic-rev5 "6910"
+ :itonami.blueprint/domain :legal/company-formation
+ :itonami.blueprint/license "AGPL-3.0-or-later"
+ :itonami.blueprint/social-impact [:cross-border-founder-access :registered-agent-liability-decentralization :kyc-transparency]
+ :itonami.blueprint/governor :registrar-governor
+ :itonami.blueprint/robotics false
+ :itonami.blueprint/required-technologies [:identity :forms :dmn :bpmn :audit-ledger]
+ :itonami.blueprint/status :public-oss}
