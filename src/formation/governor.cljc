@@ -17,13 +17,16 @@
 
     1. Spec-basis        -- did the jurisdiction proposal cite an OFFICIAL
                              source (`formation.facts`), or invent one?
-    2. Sanctions hold     -- does any officer on the application carry a
+    2. Sanctions hold     -- does any officer AT STAKE in this proposal
+                             (a filing's full roster, or an amendment's
+                             newly-introduced officers) carry a
                              sanctions/PEP hit (screened or on file)?
-    3. KYC complete       -- for a filing proposal, has EVERY officer
-                             actually been screened and cleared? A never-
-                             screened officer is not a hit (nil != :hit),
-                             so `sanctions-hit` alone would let a filing
-                             through with zero screening ever performed.
+    3. KYC complete       -- has EVERY officer at stake actually been
+                             screened and cleared? A never-screened
+                             officer is not a hit (nil != :hit), so
+                             `sanctions-hit` alone would let a filing (or
+                             an amendment adding a new director) through
+                             with zero screening ever performed.
     4. Document complete  -- for a filing proposal, are the jurisdiction's
                              required docs actually satisfied?
     5. Amendment target   -- for an amendment proposal, is there an
@@ -65,13 +68,31 @@
         [{:rule :no-spec-basis
           :detail "公式spec-basisの引用が無い提案は法域要件として扱えない"}]))))
 
+(defn- officers-at-stake
+  "Which officer-ids does THIS proposal actually put in front of the
+  registry? `:filing/submit` puts every officer currently on the
+  application. `:registry/amend` puts only the officers an amendment
+  actually INTRODUCES via `changed-fields :officers` -- an amendment that
+  does not touch :officers introduces no new officer exposure and must
+  not be blocked by an unrelated officer's status. This is the single
+  place both `sanctions-violations` and `kyc-completeness-violations`
+  consult, so 'which ops screen officers' cannot drift between the two
+  checks."
+  [{:keys [op subject]} proposal st]
+  (case op
+    :filing/submit  (:officers (store/application st subject))
+    :registry/amend (get-in proposal [:value :changed-fields :officers])
+    nil))
+
 (defn- sanctions-violations
   "A sanctions/PEP hit on any officer involved -- screened in THIS proposal
-  or already on file in the store -- is a HARD, un-overridable hold."
-  [{:keys [op subject]} proposal st]
+  or already on file in the store -- is a HARD, un-overridable hold. Covers
+  both a fresh filing's officer roster and any officer an AMENDMENT
+  introduces (adding a sanctioned director via a 'mere' address-change
+  amendment must not bypass the same scrutiny a filing would get)."
+  [request proposal st]
   (let [hit-in-proposal? (= :hit (get-in proposal [:value :verdict]))
-        officer-ids (when (= op :filing/submit)
-                      (:officers (store/application st subject)))
+        officer-ids (officers-at-stake request proposal st)
         hit-on-file? (some #(= :hit (:verdict (store/kyc-of st %))) officer-ids)]
     (when (or hit-in-proposal? hit-on-file?)
       [{:rule :sanctions-hit
@@ -82,14 +103,16 @@
   KYC-screened AND cleared (`:verdict :clear`) -- HARD, un-overridable.
   `sanctions-violations` alone is not enough: an officer who was simply
   never screened has a nil verdict, and nil is not :hit, so a filing with
-  zero screening ever performed would otherwise sail through clean."
-  [{:keys [op subject]} st]
-  (when (= op :filing/submit)
-    (let [officer-ids (:officers (store/application st subject))
-          cleared? (fn [oid] (= :clear (:verdict (store/kyc-of st oid))))]
-      (when-not (every? cleared? officer-ids)
-        [{:rule :kyc-incomplete
-          :detail "全officerのKYCスクリーニング(:clear)が完了していない状態での提出提案"}]))))
+  zero screening ever performed would otherwise sail through clean. The
+  same rule applies to any officer a `:registry/amend` introduces -- a
+  newly-added director must be cleared before the amendment can proceed,
+  not just checked for a sanctions hit."
+  [request proposal st]
+  (let [officer-ids (officers-at-stake request proposal st)
+        cleared? (fn [oid] (= :clear (:verdict (store/kyc-of st oid))))]
+    (when (and (seq officer-ids) (not (every? cleared? officer-ids)))
+      [{:rule :kyc-incomplete
+        :detail "全officerのKYCスクリーニング(:clear)が完了していない状態での提出提案"}])))
 
 (defn- document-violations
   "For `:filing/submit`, the jurisdiction's required docs must actually be
@@ -148,7 +171,7 @@
   (let [hard (into []
                    (concat (spec-basis-violations request proposal)
                            (sanctions-violations request proposal st)
-                           (kyc-completeness-violations request st)
+                           (kyc-completeness-violations request proposal st)
                            (document-violations request st)
                            (amendment-violations request proposal st)
                            (dissolution-violations request st)))

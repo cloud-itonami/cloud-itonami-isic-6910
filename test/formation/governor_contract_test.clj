@@ -159,6 +159,48 @@
         (is (= :hold (get-in res [:state :disposition])))
         (is (some #{:no-spec-basis} (-> (store/ledger db) last :basis)))))))
 
+(deftest amendment-adding-an-officer-with-a-stored-sanctions-hit-is-held
+  (testing "an amendment introducing an officer with a stored :hit KYC verdict gets the same scrutiny a filing would -- HOLD, un-overridable"
+    (let [[db actor] (fresh)]
+      (file-app-1! actor)
+      ;; A :hit verdict can never be produced through the actor's own
+      ;; :kyc/screen flow (a :hit proposal is itself a hard violation that
+      ;; holds before it ever commits -- see sanctions-hit-is-held-and-
+      ;; unoverridable). This models the real-world path that DOES leave a
+      ;; :hit on file: an external re-screening / watchlist update after
+      ;; the officer was originally cleared.
+      (store/commit-record! db {:effect :kyc/set :path ["o-4"]
+                                :payload {:officer-id "o-4" :verdict :hit}})
+      (let [res (exec-op actor "t8d" {:op :registry/amend :subject "app-1"
+                                      :changed-fields {:officers ["o-1" "o-4"]}
+                                      :effective-date "2026-07-03"} operator)]
+        (is (= :hold (get-in res [:state :disposition])) "settles immediately, no interrupt")
+        (is (not= :interrupted (:status res)))
+        (is (some #{:sanctions-hit} (-> (store/ledger db) last :basis)))
+        (is (= ["o-1"] (:officers (store/application db "app-1"))) "officer roster unchanged")))))
+
+(deftest amendment-adding-an-unscreened-officer-is-held
+  (testing "an amendment introducing a never-screened officer -> HOLD (kyc-incomplete), same as a filing would require"
+    (let [[db actor] (fresh)]
+      (file-app-1! actor)
+      ;; o-3 has never been screened at all in this test's db.
+      (let [res (exec-op actor "t8e" {:op :registry/amend :subject "app-1"
+                                      :changed-fields {:officers ["o-1" "o-3"]}
+                                      :effective-date "2026-07-03"} operator)]
+        (is (= :hold (get-in res [:state :disposition])))
+        (is (some #{:kyc-incomplete} (-> (store/ledger db) last :basis)))))))
+
+(deftest amendment-not-touching-officers-is-unaffected-by-other-officers-status
+  (testing "an address-only amendment does not need officer screening at all -- it introduces no new officer exposure"
+    (let [[_db actor] (fresh)]
+      (file-app-1! actor)
+      (let [r1 (exec-op actor "t8f" {:op :registry/amend :subject "app-1"
+                                     :changed-fields {:address "新住所"}
+                                     :effective-date "2026-07-03"} operator)]
+        (is (= :interrupted (:status r1)) "still escalates on actuation, but not held for officer reasons")
+        (let [r2 (approve! actor "t8f")]
+          (is (= :commit (get-in r2 [:state :disposition]))))))))
+
 (deftest amendment-with-no-changes-is-held
   (testing "an empty changed-fields amendment -> HOLD, even for a filed application"
     (let [[db actor] (fresh)]

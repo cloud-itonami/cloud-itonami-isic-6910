@@ -51,14 +51,19 @@ formation.operation/build          (OperationActor: langgraph-clj StateGraph)
    hold。**registry_number の存在だけでは足りない** -- 「変更/解散する
    記録がある」ことと「その法域での変更/解散手続きの法的根拠を知っている」
    ことは別で、amend/dissolve も spec-basis 引用を要求する。
-2. **sanctions-hit** -- 申請に関わる officer が制裁/PEPリストに一致して
-   いないか（このリクエストで判明した場合・既に store に記録済みの場合の
-   両方をチェック）。一致すれば un-overridable hold。
-3. **kyc-complete** -- `:filing/submit` の時点で、申請に関わる**全 officer**
-   が実際に KYC スクリーニング済み(`:verdict :clear`)か。未スクリーニング
-   （`nil`）は `:hit` ではないため `sanctions-hit` チェックだけでは
-   検出できない -- 一度もスクリーニングされていない officer がいる filing
-   がそのまま通ってしまう抜け穴を塞ぐ。
+2. **sanctions-hit** -- この提案に**関わる officer**（`formation.governor/
+   officers-at-stake` -- filing なら申請の全officer、amendment なら
+   `changed-fields :officers` が導入する新しいofficerだけ）が制裁/PEPリスト
+   に一致していないか（このリクエストで判明した場合・既に store に記録済み
+   の場合の両方をチェック）。一致すれば un-overridable hold。**住所変更のみ
+   の amendment は officer に触れないので、この検査の対象にすら入らない**
+   （無関係な officer の状態で不当にブロックしない）。
+3. **kyc-complete** -- 同じ `officers-at-stake` の**全員**が実際に KYC
+   スクリーニング済み(`:verdict :clear`)か。未スクリーニング（`nil`）は
+   `:hit` ではないため `sanctions-hit` チェックだけでは検出できない --
+   一度もスクリーニングされていない officer がいる filing、あるいは
+   amendment で新規追加された未クリアの officer が、そのまま通ってしまう
+   抜け穴を塞ぐ。
 4. **document-complete** -- `:filing/submit` の時点で、法域の必要書類が
    実際に充足しているか（advisor の自己申告 confidence を信用せず、
    governor 自身が `formation.facts/required-docs-satisfied?` で検証）。

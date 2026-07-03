@@ -267,6 +267,36 @@ false, id-doc nil）を追加 -- どの application にもデフォルトでは
 済みのため無変更で green）。44 tests / 226 assertions 全体 green、
 lint clean。
 
+## Addendum 8 (2026-07-03) -- amendment 経由の officer 追加が sanctions/KYC 検査を素通りする穴を修正
+
+発見: `sanctions-violations` / `kyc-completeness-violations` は
+`(when (= op :filing/submit) ...)` で filing にしか officer チェックを
+かけていなかった。しかし `:registry/amend` の `changed-fields` は自由形式
+map で、`{:officers [...]}` を含めれば application の officer 名簿を
+実質的に差し替えられる -- **制裁対象者を「住所変更」等と一緒に紛れ込ませて
+追加登記する amendment が、governor の officer チェックを一切受けずに
+escalate（人間承認だけ）まで進んでしまっていた**。
+
+修正: `formation.governor/officers-at-stake`（新規）を単一の判定源にし、
+`sanctions-violations` と `kyc-completeness-violations` の両方がこれを
+参照する:
+
+- `:filing/submit` -- 申請の全 officer（従来通り）
+- `:registry/amend` -- `changed-fields :officers` が**導入する** officer
+  のみ（officer に触れない amendment は対象外 -- 無関係な officer の状態で
+  不当にブロックしない）
+
+`:hit` verdict は actor 自身の `:kyc/screen` フローでは**store に書き込まれる
+前に必ず hold する**ため（`sanctions-hit-is-held-and-unoverridable` が保証）、
+`hit-on-file?` を直接演習するテストは `store/commit-record!` で `:hit` を
+直接 seed する（外部の再スクリーニング/ウォッチリスト更新で、以前クリアだった
+officer が後から `:hit` になる現実的経路をモデル化）。
+
+3 tests / 12 assertions を追加（制裁ヒット記録済み officer の追加→hold、
+未スクリーニング officer の追加→hold(`:kyc-incomplete`)、officer に
+触れない住所変更 amendment は無関係な officer の状態に影響されず正常に
+escalate→commit）。47 tests / 234 assertions 全体 green、lint clean。
+
 ## 代替案と不採用理由
 
 | 案 | 採否 | 理由 |
