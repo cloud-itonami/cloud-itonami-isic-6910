@@ -6,14 +6,14 @@
   proposal and fall back to HOLD -- the company-formation analog of
   robotaxi's Minimal Risk Condition and gftd-talent-actor's PolicyGovernor.
 
-  Five checks, in priority order. The first three are HARD violations: a
+  Six checks, in priority order. The first four are HARD violations: a
   human approver CANNOT override them (you don't get to approve your way
   past a sanctions hit or a fabricated legal requirement). The last two are
   SOFT: they ask a human to look (low confidence / actuation), and the
   human may approve -- but see `formation.phase`: for `:stake :actuation`
-  (a real government submission or fee payment) NO phase ever allows
-  auto-commit either. Two independent layers agree that actuation is
-  always a human call.
+  (a real government submission, amendment filing, or fee payment) NO
+  phase ever allows auto-commit either. Two independent layers agree that
+  actuation is always a human call.
 
     1. Spec-basis        -- did the jurisdiction proposal cite an OFFICIAL
                              source (`formation.facts`), or invent one?
@@ -21,8 +21,11 @@
                              sanctions/PEP hit (screened or on file)?
     3. Document complete  -- for a filing proposal, are the jurisdiction's
                              required docs actually satisfied?
-    4. Confidence floor   -- LLM confidence below threshold -> escalate.
-    5. Actuation gate     -- :stake :actuation -> always escalate; never
+    4. Amendment target   -- for an amendment proposal, is there an
+                             existing registry number to amend, and is the
+                             amendment actually non-empty?
+    5. Confidence floor   -- LLM confidence below threshold -> escalate.
+    6. Actuation gate     -- :stake :actuation -> always escalate; never
                              auto, at any phase (structural, not a policy
                              toggle)."
   (:require [formation.facts :as facts]
@@ -74,6 +77,22 @@
         [{:rule :incomplete-documents
           :detail "法域の必要書類が充足していない状態での提出提案"}]))))
 
+(defn- amendment-violations
+  "For `:registry/amend`, the target application must already carry a
+  registry number (you cannot amend a filing that was never submitted),
+  and the amendment must actually change something -- both HARD."
+  [{:keys [op subject]} proposal st]
+  (when (= op :registry/amend)
+    (let [app (store/application st subject)
+          changed (get-in proposal [:value :changed-fields])]
+      (cond-> []
+        (nil? (:registry-number app))
+        (conj {:rule :no-registry-number
+               :detail "初回登記(registry_number)が無い申請には変更登記できない"})
+        (empty? changed)
+        (conj {:rule :empty-amendment
+               :detail "変更内容が空の変更登記提案"})))))
+
 (defn check
   "Censors a Registrar-LLM proposal against the governor rules. Returns
    {:ok? bool :violations [..] :confidence c :escalate? bool :high-stakes? bool
@@ -87,7 +106,8 @@
   (let [hard (into []
                    (concat (spec-basis-violations request proposal)
                            (sanctions-violations request proposal st)
-                           (document-violations request st)))
+                           (document-violations request st)
+                           (amendment-violations request proposal st)))
         conf (:confidence proposal 0.0)
         low? (< conf confidence-floor)
         stakes? (boolean (high-stakes (:stake proposal)))

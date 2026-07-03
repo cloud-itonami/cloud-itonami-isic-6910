@@ -3,13 +3,14 @@
 
   It normalizes customer intake, drafts a per-jurisdiction document
   checklist + fee estimate, screens officers against a KYC/sanctions
-  signal, and drafts the filing-submission action. CRITICAL: it is a
+  signal, drafts the filing-submission action, and drafts
+  post-incorporation amendments (変更登記). CRITICAL: it is a
   smart-but-untrusted advisor. It returns a *proposal* (with a rationale +
   the fields it cited), never a committed record or a real government
   submission. Every output is censored downstream by
   `formation.governor` before anything touches the SSoT, and
-  `:filing/submit` / `:payment/remit` proposals NEVER auto-commit at any
-  phase -- see README `Actuation`.
+  `:filing/submit` / `:registry/amend` / `:payment/remit` proposals NEVER
+  auto-commit at any phase -- see README `Actuation`.
 
   Like `talent.hrllm` / `itonami.opsllm`, this is a deterministic mock so
   the actor graph runs offline and the governor contract is exercised
@@ -135,6 +136,35 @@
      :stake      :actuation
      :confidence (if docs-ok? 0.9 0.3)}))
 
+(defn- propose-amendment
+  "Draft a post-incorporation amendment (変更登記, e.g. registered-address or
+  officer change). ALWAYS `:stake :actuation` -- an amendment is submitted
+  to the same real government registry as the original filing, so it is
+  gated exactly like `:filing/submit`: never auto-committed at any phase
+  (`formation.phase`), always escalated by the governor's actuation gate.
+  An application that was never filed (no registry-number) has nothing to
+  amend -- the governor's hard `:no-registry-number` check catches that."
+  [db {:keys [subject changed-fields effective-date]}]
+  (let [app (store/application db subject)]
+    (if (:registry-number app)
+      {:summary    (str (:entity-name app) " (" (:registry-number app)
+                        ") の変更登記案: " (pr-str (keys changed-fields)))
+       :rationale  (str "既存登記記録 " (:registry-number app) " への追記型修正。")
+       :cites      [(:registry-number app)]
+       :effect     :registry/amend-submitted
+       :value      {:application-id subject :changed-fields changed-fields
+                    :effective-date effective-date}
+       :stake      :actuation
+       :confidence 0.9}
+      {:summary    (str (:entity-name app) " は未登記のため変更登記できません")
+       :rationale  "registry_number が無い = 初回登記が未提出。"
+       :cites      []
+       :effect     :registry/amend-submitted
+       :value      {:application-id subject :changed-fields changed-fields
+                    :effective-date effective-date}
+       :stake      :actuation
+       :confidence 0.2})))
+
 (defn infer
   "Route a request to the right proposal generator.
   request: {:op kw :subject id ...op-specific...}"
@@ -144,6 +174,7 @@
     :jurisdiction/assess  (assess-jurisdiction db request)
     :kyc/screen           (screen-kyc db request)
     :filing/submit        (propose-filing db request)
+    :registry/amend       (propose-amendment db request)
     {:summary "未対応の操作" :rationale (str op) :cites []
      :effect :noop :stake nil :confidence 0.0}))
 
@@ -162,7 +193,7 @@
        "EDNだけを出力します。\n"
        "キー: :summary(人向けドラフト) :rationale(根拠/必ず事実から) "
        ":cites(使った事実キーのベクタ) "
-       ":effect(:application/upsert|:assessment/set|:kyc/set|:filing/mark-submitted) "
+       ":effect(:application/upsert|:assessment/set|:kyc/set|:filing/mark-submitted|:registry/amend-submitted) "
        ":stake(:actuation か nil) :confidence(0..1)。\n"
        "重要: 登録されていない法域の要件を絶対に創作してはいけません。"
        "spec-basisが無い場合は :cites を空にし confidence を上げないこと。"))
@@ -173,6 +204,7 @@
     :kyc/screen          {:officer (store/officer st subject)}
     :filing/submit       {:application (store/application st subject)
                           :assessment (store/assessment-of st subject)}
+    :registry/amend      {:application (store/application st subject)}
     {:application (store/application st subject)}))
 
 (defn- parse-proposal

@@ -1,9 +1,10 @@
 (ns formation.sim
   "Demo driver -- `clojure -M:dev:run`. Walks a clean application through
   intake -> jurisdiction assessment -> KYC screening -> filing proposal
-  (always escalates) -> human approval -> commit, then shows a HARD hold
-  (a sanctions hit) that never reaches a human at all, and prints the
-  audit ledger + the draft registry record."
+  (always escalates) -> human approval -> commit -> a post-incorporation
+  amendment (also always escalates), then shows two HARD holds (a
+  sanctions hit, a fabricated jurisdiction) that never reach a human at
+  all, and prints the audit ledger + the draft registry record history."
   (:require [langgraph.graph :as g]
             [formation.store :as store]
             [formation.operation :as op]))
@@ -36,6 +37,14 @@
       (println r)
       (println "-- human operator approves --")
       (println (approve! actor "t4")))
+
+    (println "== registry/amend app-1: registered-address change (always escalates -- actuation) ==")
+    (let [r (exec! actor "t4b" {:op :registry/amend :subject "app-1"
+                               :changed-fields {:address "東京都港区2-2-2"}
+                               :effective-date "2026-07-10"} operator)]
+      (println r)
+      (println "-- human operator approves --")
+      (println (approve! actor "t4b")))
 
     (println "== kyc/screen o-2 (sanctions hit -> HARD hold, never reaches a human) ==")
     (println (exec! actor "t5" {:op :kyc/screen :subject "o-2"} operator))

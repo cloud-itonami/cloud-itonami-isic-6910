@@ -75,6 +75,24 @@
                  :registry-number (get result "registry_number")
                  :lei (get result "lei")}}))
 
+(defn- amend!
+  "Backend-agnostic `:registry/amend-submitted` -- looks up the application
+  via the protocol, drafts the append-only amendment record via
+  `formation.registry/register-change`, and returns {:result ..
+  :app-patch ..} for the caller to persist. The amendment record is
+  APPENDED to registry-history; the original incorporation record is
+  never overwritten (G5-style append-only, matching matsurigoto's
+  corp-registry discipline)."
+  [s app-id changed-fields effective-date]
+  (let [app (application s app-id)
+        result (registry/register-change
+                (:registry-number app) changed-fields effective-date)]
+    ;; app-patch is exactly changed-fields (no extra bookkeeping keys) so
+    ;; both backends' app->tx / merge stay in lockstep -- the amendment's
+    ;; own effective-date already lives inside `result`'s "record".
+    {:result result
+     :app-patch changed-fields}))
+
 ;; ----------------------------- MemStore (default) -----------------------------
 
 (defrecord MemStore [a]
@@ -105,6 +123,16 @@
         (swap! a (fn [state]
                    (-> state
                        (update-in [:sequences (:jurisdiction (get-in state [:applications app-id]))] (fnil inc 0))
+                       (update-in [:applications app-id] merge app-patch)
+                       (update :registry registry/append result))))
+        result)
+
+      :registry/amend-submitted
+      (let [app-id (first path)
+            {:keys [changed-fields effective-date]} value
+            {:keys [result app-patch]} (amend! s app-id changed-fields effective-date)]
+        (swap! a (fn [state]
+                   (-> state
                        (update-in [:applications app-id] merge app-patch)
                        (update :registry registry/append result))))
         result)
@@ -229,6 +257,15 @@
                       ;; store just the "record" sub-map, matching MemStore's
                       ;; `registry/append` convention -- registry-history is a
                       ;; history of RECORDS, not of the full filing result.
+                      {:registry/seq (count (registry-history s)) :registry/record (enc (get result "record"))}])
+        result)
+
+      :registry/amend-submitted
+      (let [app-id (first path)
+            {:keys [changed-fields effective-date]} value
+            {:keys [result app-patch]} (amend! s app-id changed-fields effective-date)]
+        (d/transact! conn
+                     [(app->tx (assoc app-patch :id app-id))
                       {:registry/seq (count (registry-history s)) :registry/record (enc (get result "record"))}])
         result)
       nil)

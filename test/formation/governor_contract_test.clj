@@ -89,6 +89,67 @@
       (is (= :hold (get-in r2 [:state :disposition])))
       (is (empty? (store/registry-history db)) "nothing drafted on reject"))))
 
+(defn- approve! [actor tid]
+  (g/run* actor {:approval {:status :approved :by "op-1"}} {:thread-id tid :resume? true}))
+
+(defn- file-app-1!
+  "Drive app-1 all the way to :filed (assess -> approve, screen -> approve,
+  file -> approve). Shared setup for the amendment tests below."
+  [actor]
+  (exec-op actor "setup-a" {:op :jurisdiction/assess :subject "app-1"} operator)
+  (approve! actor "setup-a")
+  (exec-op actor "setup-b" {:op :kyc/screen :subject "o-1"} operator)
+  (approve! actor "setup-b")
+  (exec-op actor "setup-c" {:op :filing/submit :subject "app-1"} operator)
+  (approve! actor "setup-c"))
+
+(deftest amendment-without-a-filed-application-is-held
+  (testing "an application with no registry_number has nothing to amend -> HOLD"
+    (let [[db actor] (fresh)
+          res (exec-op actor "t8" {:op :registry/amend :subject "app-1"
+                                   :changed-fields {:address "新住所"}
+                                   :effective-date "2026-07-03"} operator)]
+      (is (= :hold (get-in res [:state :disposition])))
+      (is (some #{:no-registry-number} (-> (store/ledger db) first :basis)))
+      (is (empty? (store/registry-history db)) "no amendment drafted"))))
+
+(deftest amendment-with-no-changes-is-held
+  (testing "an empty changed-fields amendment -> HOLD, even for a filed application"
+    (let [[db actor] (fresh)]
+      (file-app-1! actor)
+      (let [res (exec-op actor "t9" {:op :registry/amend :subject "app-1"
+                                     :changed-fields {} :effective-date "2026-07-03"} operator)]
+        (is (= :hold (get-in res [:state :disposition])))
+        (is (some #{:empty-amendment} (-> (store/ledger db) last :basis)))
+        (is (= 1 (count (store/registry-history db))) "only the original incorporation record")))))
+
+(deftest amendment-always-escalates-then-human-decides
+  (testing "a clean amendment on a filed application still ALWAYS interrupts -- actuation is never auto"
+    (let [[db actor] (fresh)]
+      (file-app-1! actor)
+      (let [r1 (exec-op actor "t10" {:op :registry/amend :subject "app-1"
+                                     :changed-fields {:address "新住所"}
+                                     :effective-date "2026-07-03"} operator)]
+        (is (= :interrupted (:status r1)) "pauses for human approval even when governor-clean")
+        (let [r2 (approve! actor "t10")]
+          (is (= :commit (get-in r2 [:state :disposition])))
+          (is (= "新住所" (:address (store/application db "app-1"))) "application record updated")
+          (is (= 2 (count (store/registry-history db)))
+              "original incorporation record + one appended amendment")
+          (is (= "change-draft" (get (last (store/registry-history db)) "kind")))))))
+  (testing "reject -> hold, application and registry-history unchanged"
+    (let [[db actor] (fresh)]
+      (file-app-1! actor)
+      (exec-op actor "t11" {:op :registry/amend :subject "app-1"
+                            :changed-fields {:address "新住所"}
+                            :effective-date "2026-07-03"} operator)
+      (let [before-history (store/registry-history db)
+            r2 (g/run* actor {:approval {:status :rejected :by "op-1"}}
+                       {:thread-id "t11" :resume? true})]
+        (is (= :hold (get-in r2 [:state :disposition])))
+        (is (not= "新住所" (:address (store/application db "app-1"))))
+        (is (= before-history (store/registry-history db)) "nothing appended on reject")))))
+
 (deftest every-decision-leaves-one-ledger-fact
   (testing "write-only-through-ledger: N operations -> N ledger facts"
     (let [[db actor] (fresh)]

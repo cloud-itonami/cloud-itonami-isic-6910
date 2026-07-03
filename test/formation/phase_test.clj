@@ -1,15 +1,24 @@
 (ns formation.phase-test
   "The phase table as executable tests. The single invariant this repo
-  cannot regress on: `:filing/submit` (and `:payment/remit`, if it is ever
-  added) must NEVER be a member of any phase's `:auto` set."
+  cannot regress on: `:filing/submit`, `:registry/amend` (and
+  `:payment/remit`, if it is ever added) must NEVER be a member of any
+  phase's `:auto` set."
   (:require [clojure.test :refer [deftest is testing]]
             [formation.phase :as phase]))
 
+(def actuation-ops
+  "Every op that touches a real government registry/payment. This set is
+  the single source of truth for `filing-submit-never-auto-at-any-phase`
+  below -- add a new actuation op here, not just in formation.phase, so a
+  forgotten :auto exclusion fails loudly instead of silently."
+  #{:filing/submit :registry/amend})
+
 (deftest filing-submit-never-auto-at-any-phase
-  (testing "structural invariant: no phase, now or in the future entries, auto-commits a real filing"
-    (doseq [[n {:keys [auto]}] phase/phases]
-      (is (not (contains? auto :filing/submit))
-          (str "phase " n " must not auto-commit :filing/submit")))))
+  (testing "structural invariant: no phase, now or in the future entries, auto-commits a real actuation op"
+    (doseq [[n {:keys [auto]}] phase/phases
+            op actuation-ops]
+      (is (not (contains? auto op))
+          (str "phase " n " must not auto-commit " op)))))
 
 (deftest phase-0-is-fully-read-only
   (is (empty? (:writes (get phase/phases 0)))))

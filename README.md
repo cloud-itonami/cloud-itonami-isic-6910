@@ -44,14 +44,15 @@ liability, many operators can each run their own governed instance.
 
 ### Actuation
 
-**A real government submission or a real fee payment is never autonomous,
-at any phase, by construction.** Two independent layers enforce this
-(`formation.governor`'s `:actuation` high-stakes gate and
-`formation.phase`'s phase table, which never puts `:filing/submit` in any
-phase's `:auto` set) -- see `formation.phase`'s docstring and
-`test/formation/phase_test.clj`'s `filing-submit-never-auto-at-any-phase`.
-The actor may draft, check, screen and recommend; a human operator is
-always the one who actually files and pays.
+**A real government submission, a real amendment filing, or a real fee
+payment is never autonomous, at any phase, by construction.** Two
+independent layers enforce this (`formation.governor`'s `:actuation`
+high-stakes gate and `formation.phase`'s phase table, which never puts
+`:filing/submit` or `:registry/amend` in any phase's `:auto` set) -- see
+`formation.phase`'s docstring and `test/formation/phase_test.clj`'s
+`filing-submit-never-auto-at-any-phase`. The actor may draft, check,
+screen and recommend; a human operator is always the one who actually
+files, amends and pays.
 
 ## The core contract
 
@@ -78,7 +79,7 @@ proposal still always routes to a human.
 ## Run
 
 ```bash
-clojure -M:dev:run     # walk one clean application + one HARD-hold case through the actor
+clojure -M:dev:run     # walk one clean application through incorporation + a post-incorporation amendment, plus two HARD-hold cases
 clojure -M:dev:test    # governor contract · phase invariants · LEI registry conformance
 clojure -M:lint        # clj-kondo (errors fail; CI mirrors this)
 ```
@@ -108,8 +109,8 @@ full architecture and decision record.
 | `src/formation/store.cljc` | **Store** protocol -- `MemStore` ‖ `DatomicStore` (`langchain.db`, swappable to Datomic Local or a kotoba-server pod) + append-only audit ledger + draft registry history |
 | `src/formation/registry.cljc` | ISO 17442 LEI issuance (ISO 7064 MOD 97-10) + incorporation/amendment draft records -- ported from `matsurigoto`'s corp-registry (etzhayyim/root, ADR-2606062300) |
 | `src/formation/facts.cljc` | Per-jurisdiction requirement catalog with an official spec-basis citation per entry, honest coverage reporting |
-| `src/formation/registrarllm.cljc` | **Registrar-LLM Advisor** -- `mock-advisor` ‖ `llm-advisor`; intake/assessment/KYC/filing proposals |
-| `src/formation/governor.cljc` | **RegistrarGovernor** -- spec-basis · sanctions hold · document-complete · confidence floor · actuation gate |
+| `src/formation/registrarllm.cljc` | **Registrar-LLM Advisor** -- `mock-advisor` ‖ `llm-advisor`; intake/assessment/KYC/filing/amendment proposals |
+| `src/formation/governor.cljc` | **RegistrarGovernor** -- spec-basis · sanctions hold · document-complete · amendment-target · confidence floor · actuation gate |
 | `src/formation/phase.cljc` | **Phase 0→3** -- read-only → assisted intake → assisted assess/screen → supervised (filing always human) |
 | `src/formation/operation.cljc` | **OperationActor** -- langgraph-clj StateGraph |
 | `src/formation/sim.cljc` | demo driver |
