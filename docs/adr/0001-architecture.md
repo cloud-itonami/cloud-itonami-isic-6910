@@ -610,3 +610,54 @@ application 完全不変）の挙動差を確認済み。本 ADR で見つかっ
 | `cloud-itonami` 本体（gftdcojp 自社業務基盤）に新規 lane として追加 | ❌ | `cloud-itonami` の activity/decision/effect/audit モデルは gftdcojp *自社* 業務用であり、顧客の KYC/custody/settlement を扱う規制対応サービスとは設計前提が異なる |
 | gftdcojp 配下の非公開 vendor repo として実装 | ❌ | liability を単一 vendor に集中させると「全世界どこでも」のスケールが取れない。OSS + 複数 operator 自己運用モデルの方が本要求に合う |
 | 全ての `cloud-itonami-{ISIC}` blueprint と同様に robotics premise（ADR-2607011000）を字義通り適用 | ❌（部分的） | 会社設立代行は物理領域作業を伴わないデジタル/書類業務であり、`cloud-itonami-6310` (HR SaaS) と同様に robotics premise の対象外として扱う。cloud-itonami-6310 自体が robotics retrofit の対象外であった先例に倣う |
+
+## Closing note (2026-07-03) -- ここまでの反復開発の総括と、正直な現状の棚卸し
+
+R0（Addendum なし）から Addendum 15 まで、繰り返しの改善ループでこの
+actor を育てた。前半（Addendum 1-8）は素直な coverage 拡大と機能配線
+（法域 10→31・`DatomicStore` backend・`:registry/amend`/`:registry/
+dissolve` の配線・KYC完全性チェック・officer-at-stake の統一）。
+後半（Addendum 9, 12, 14, 15）は実機再現で確認した**4件の実際の
+ガバナンス迂回バグ**の発見と修正で、いずれも「advisor（信頼できない
+提案者、実LLMを含む）の自己申告した内容が、governor の各チェックが
+前提とする "op" や "対象フィールド" と食い違ったまま SSoT へ書き込まれる」
+という同一のパターンだった:
+
+- Addendum 9: 登記/解散済み申請への `:application/intake` が無検閲
+- Addendum 12: `:effect` がリクエストの `:op` と一致するか未検証
+- Addendum 14: `:registry/amend` の `changed-fields` に対象フィールドの
+  制限が無く `:status` 等を密輸できた
+- Addendum 15: `:application/intake`（人間承認が一度も発生しない唯一の
+  op）が無制限で、偽の登記済み状態の捏造・subject 詐称による別申請の
+  書き換えが可能だった
+
+`:applications` へ提案内容を直接 merge する経路は `:application/intake`
+と `:registry/amend` の2つだけであり、両方とも allowlist / 検証で
+塞いだ。`:filing/submit` / `:registry/dissolve` は専用関数
+（`file!`/`dissolve!`）経由で proposal を生 merge しないため、同型の
+攻撃面を構造的に持たない -- この意味で、このバグ**クラス**は現時点で
+閉じたと考えている（新しい op や新しい merge 経路を追加する際は、
+同じ検証をその経路にも適用することを忘れないこと）。
+
+**正直に残っている既知のギャップ**（隠さず記録する -- 誇張して
+「完成した」と主張しないのがこのリポジトリ全体の規律）:
+
+1. **法域カバレッジ 31/194**（`formation.facts/coverage`）。追加は
+   1エントリ=1本物の公式ソース引用が原則で、量産より正確性を優先している。
+2. **document-complete チェックが名前より弱い** -- `assess-jurisdiction`
+   が `:checklist` に `formation.facts` の `required-docs` をそのまま
+   コピーするため、`document-violations` は実質「assessment を一度でも
+   実行したか」しか検証できておらず、「顧客が実際に必要書類を提出したか」
+   は検証できていない。修正には `:required-docs` の安定キー化（現状は
+   人間向け説明文字列そのものが識別子）を伴う破壊的リファクタが必要で、
+   影響範囲（31法域全エントリ + 既存テストの大半）を鑑みて本セッションでは
+   見送った。次に着手すべき最有力候補。
+3. **DatomicStore は in-process 検証止まり** -- プロトコル契約（CRUD、
+   Addendum 2）も governor 全体フロー（Addendum 10）も証明済みだが、
+   実際の Datomic Local / kotoba-server pod への接続はまだ未検証。
+4. 実政府ポータル・実決済・実KYC/制裁プロバイダ統合は最初から対象外
+   （オペレーター側の責務、設計通り）。
+
+現時点で 63 tests / 296 assertions、lint clean、CI green の状態で
+この反復を一旦区切る。次に再開する際は上記2（document-complete の
+実質化）が最も価値の高い着手点になる見込み。
