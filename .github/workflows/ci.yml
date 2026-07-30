@@ -35,12 +35,12 @@ jobs:
         with: { path: orgs/cloud-itonami/cloud-itonami-isic-6910 }
       - uses: actions/checkout@v4
         with:
-          repository: com-junkawasaki/langgraph-clj
-          path: orgs/com-junkawasaki/langgraph-clj
+          repository: kotoba-lang/langgraph
+          path: orgs/kotoba-lang/langgraph
       - uses: actions/checkout@v4
         with:
-          repository: com-junkawasaki/langchain-clj
-          path: orgs/com-junkawasaki/langchain-clj
+          repository: kotoba-lang/langchain
+          path: orgs/kotoba-lang/langchain
       - uses: actions/checkout@v4
         with:
           repository: cloud-itonami/cloud-itonami-isic-8291
