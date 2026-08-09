@@ -32,6 +32,7 @@
   (officer [s id])
   (kyc-of [s officer-id] "committed KYC screening verdict for an officer, or nil")
   (assessment-of [s app-id] "committed jurisdiction assessment (doc checklist + fee estimate), or nil")
+  (seal-of [s seal-id] "committed seal craft metadata (inkan compose result), or nil")
   (ledger [s])
   (registry-history [s] "the append-only registry-record history (formation.registry drafts)")
   (next-sequence [s jurisdiction] "next registry-number sequence for a jurisdiction")
@@ -128,6 +129,7 @@
   (officer [_ id] (get-in @a [:officers id]))
   (kyc-of [_ id] (get-in @a [:kyc id]))
   (assessment-of [_ app-id] (get-in @a [:assessments app-id]))
+  (seal-of [_ seal-id] (get-in @a [:seals seal-id]))
   (ledger [_] (:ledger @a))
   (registry-history [_] (:registry @a))
   (next-sequence [_ jurisdiction]
@@ -142,6 +144,17 @@
 
       :kyc/set
       (swap! a assoc-in [:kyc (first path)] payload)
+
+      :seal/set
+      ;; craft metadata from inkan (hash + kind/text/svg). path[0] = seal-id.
+      (swap! a assoc-in [:seals (first path)]
+             (or payload value))
+
+      :seal/attach
+      ;; link a composed seal onto an application; does not mutate the seal.
+      (let [app-id (first path)
+            sid (or (:seal-id value) (:seal-id payload))]
+        (swap! a update-in [:applications app-id] merge {:seal-id sid}))
 
       :filing/mark-submitted
       (let [app-id (first path)
@@ -182,7 +195,7 @@
   "A MemStore seeded with the demo customer set. The deterministic default."
   []
   (->MemStore (atom (assoc (demo-data)
-                           :assessments {} :kyc {} :ledger [] :sequences {} :registry []))))
+                           :assessments {} :kyc {} :seals {} :ledger [] :sequences {} :registry []))))
 
 ;; ----------------------------- DatomicStore (langchain.db) -----------------------------
 
@@ -196,6 +209,7 @@
    :officer/id      {:db/unique :db.unique/identity}
    :kyc/officer-id  {:db/unique :db.unique/identity}
    :assessment/app-id {:db/unique :db.unique/identity}
+   :seal/id         {:db/unique :db.unique/identity}
    :ledger/seq      {:db/unique :db.unique/identity}
    :registry/seq    {:db/unique :db.unique/identity}
    :sequence/jurisdiction {:db/unique :db.unique/identity}})
@@ -204,7 +218,7 @@
 (defn- dec* [s] (when s (edn/read-string s)))
 
 (defn- app->tx [{:keys [id entity-name jurisdiction officers capital articles address
-                        status registry-number lei]}]
+                        status registry-number lei seal-id]}]
   (cond-> {:app/id id}
     entity-name      (assoc :app/entity-name entity-name)
     jurisdiction     (assoc :app/jurisdiction jurisdiction)
@@ -214,18 +228,21 @@
     address          (assoc :app/address address)
     status           (assoc :app/status status)
     registry-number  (assoc :app/registry-number registry-number)
-    lei              (assoc :app/lei lei)))
+    lei              (assoc :app/lei lei)
+    seal-id          (assoc :app/seal-id seal-id)))
 
 (def ^:private app-pull
   [:app/id :app/entity-name :app/jurisdiction :app/officers :app/capital
-   :app/articles :app/address :app/status :app/registry-number :app/lei])
+   :app/articles :app/address :app/status :app/registry-number :app/lei
+   :app/seal-id])
 
 (defn- pull->app [m]
   (when (:app/id m)
-    {:id (:app/id m) :entity-name (:app/entity-name m) :jurisdiction (:app/jurisdiction m)
-     :officers (or (dec* (:app/officers m)) []) :capital (:app/capital m)
-     :articles (:app/articles m) :address (:app/address m) :status (:app/status m)
-     :registry-number (:app/registry-number m) :lei (:app/lei m)}))
+    (cond-> {:id (:app/id m) :entity-name (:app/entity-name m) :jurisdiction (:app/jurisdiction m)
+             :officers (or (dec* (:app/officers m)) []) :capital (:app/capital m)
+             :articles (:app/articles m) :address (:app/address m) :status (:app/status m)
+             :registry-number (:app/registry-number m) :lei (:app/lei m)}
+      (:app/seal-id m) (assoc :seal-id (:app/seal-id m)))))
 
 (defn- officer->tx [{:keys [id name sanctions-hit? id-doc]}]
   (cond-> {:officer/id id}
@@ -258,6 +275,10 @@
     (dec* (d/q '[:find ?p . :in $ ?aid
                 :where [?a :assessment/app-id ?aid] [?a :assessment/payload ?p]]
               (d/db conn) app-id)))
+  (seal-of [_ seal-id]
+    (dec* (d/q '[:find ?p . :in $ ?sid
+                :where [?s :seal/id ?sid] [?s :seal/payload ?p]]
+              (d/db conn) seal-id)))
   (ledger [_]
     (->> (d/q '[:find ?s ?f :where [?e :ledger/seq ?s] [?e :ledger/fact ?f]] (d/db conn))
          (sort-by first)
@@ -281,6 +302,15 @@
 
       :kyc/set
       (d/transact! conn [{:kyc/officer-id (first path) :kyc/payload (enc payload)}])
+
+      :seal/set
+      (d/transact! conn [{:seal/id (first path)
+                         :seal/payload (enc (or payload value))}])
+
+      :seal/attach
+      (let [app-id (first path)
+            sid (or (:seal-id value) (:seal-id payload))]
+        (d/transact! conn [(app->tx {:id app-id :seal-id sid})]))
 
       :filing/mark-submitted
       (let [app-id (first path)

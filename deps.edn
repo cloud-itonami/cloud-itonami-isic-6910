@@ -23,7 +23,11 @@ io.github.com-junkawasaki/langgraph-clj
         ;; registrarllm/operation/governor have zero compile-time
         ;; dependency on it (the screen fn is plain-injected).
         io.github.cloud-itonami/cloud-itonami-isic-8291
-        {:local/root "../cloud-itonami-isic-8291"}}
+        {:local/root "../cloud-itonami-isic-8291"}
+        ;; pure .cljc seal craft (inkan.svg/seal). Coordinates/layout live
+        ;; only inside inkan; formation.seal validates + hashes the result.
+        io.github.cloud-itonami/inkan
+        {:local/root "../inkan"}}
  :aliases
  {;; offline workspace dev -- pin transitive langchain-clj to local checkout
   :dev {:override-deps

@@ -31,19 +31,26 @@
 
 (def read-ops  #{:coverage/report})
 (def write-ops #{:application/intake :jurisdiction/assess :kyc/screen
-                 :filing/submit :registry/amend :registry/dissolve})
+                 :filing/submit :registry/amend :registry/dissolve
+                 ;; craft: inkan seal compose / attach (not actuation)
+                 :seal/compose :seal/attach})
 
 ;; NOTE the invariant: :filing/submit, :registry/amend and
 ;; :registry/dissolve are members of `write-ops` (they are governor-gated
 ;; like any write) but are NEVER a member of any phase's `:auto` set
 ;; below. Do not add them there.
+;;
+;; `:seal/compose` IS auto-eligible at phase 3 when the governor is clean
+;; (valid kind + non-empty text) -- seal craft is not a government filing.
+;; Invalid seal requests are HARD-held by the governor before phase runs.
 (def phases
   "phase -> {:label .. :writes <ops allowed to write> :auto <ops allowed to
   auto-commit when governor-clean>}."
   {0 {:label "read-only"          :writes #{}                                                    :auto #{}}
-   1 {:label "assisted-intake"    :writes #{:application/intake}                                :auto #{}}
-   2 {:label "assisted-assess"    :writes #{:application/intake :jurisdiction/assess :kyc/screen} :auto #{}}
-   3 {:label "supervised-auto"    :writes write-ops                                              :auto #{:application/intake}}})
+   1 {:label "assisted-intake"    :writes #{:application/intake :seal/compose :seal/attach}     :auto #{}}
+   2 {:label "assisted-assess"    :writes #{:application/intake :jurisdiction/assess :kyc/screen
+                                             :seal/compose :seal/attach}                         :auto #{}}
+   3 {:label "supervised-auto"    :writes write-ops                                              :auto #{:application/intake :seal/compose}}})
 
 (def default-phase 3)
 
