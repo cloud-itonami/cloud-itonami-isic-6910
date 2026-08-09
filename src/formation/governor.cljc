@@ -81,6 +81,7 @@
                              auto, at any phase (structural, not a policy
                              toggle)."
   (:require [formation.facts :as facts]
+            [formation.seal :as seal]
             [formation.store :as store]))
 
 (def confidence-floor 0.6)
@@ -108,7 +109,10 @@
    :kyc/screen          :kyc/set
    :filing/submit       :filing/mark-submitted
    :registry/amend      :registry/amend-submitted
-   :registry/dissolve   :registry/dissolve-submitted})
+   :registry/dissolve   :registry/dissolve-submitted
+   ;; craft (inkan seal compose / attach) -- not actuation
+   :seal/compose        :seal/set
+   :seal/attach         :seal/attach})
 
 (defn- effect-mismatch-violations
   "HARD, checked first: a proposal whose :effect is not the one paired
@@ -324,6 +328,40 @@
         (conj {:rule :already-dissolved
                :detail "既に解散済みの申請への二重解散提案"})))))
 
+(defn- seal-compose-violations
+  "HARD: `:seal/compose` with an empty name or an unsupported kind is
+  rejected outright. Kind coordinates come only from `inkan.geometry/
+  kinds` (via `formation.seal/supported-kinds`) -- inventing a kind is a
+  hold, not a soft escalation. Validates the REQUEST's `:spec` first
+  (what the operator asked for), falling back to the proposal's value
+  fields if the request omitted a separate :spec map."
+  [{:keys [op spec]} proposal]
+  (when (= op :seal/compose)
+    (let [s (or spec
+                (select-keys (:value proposal) [:kind :text :inner-text :date :size-mm]))]
+      (seal/validate-spec s))))
+
+(defn- seal-attach-violations
+  "HARD: `:seal/attach` needs a real composed seal on file and a real
+  application subject. Attaching a missing seal-id (or inventing one in
+  the proposal) must not silently write a dangling reference onto the
+  application."
+  [{:keys [op subject seal-id]} proposal st]
+  (when (= op :seal/attach)
+    (let [sid (or seal-id (get-in proposal [:value :seal-id]))
+          app (store/application st subject)
+          seal-rec (when sid (store/seal-of st sid))]
+      (cond-> []
+        (nil? app)
+        (conj {:rule :seal-attach-no-application
+               :detail (str "印影を添付する申請が存在しない: " subject)})
+        (nil? sid)
+        (conj {:rule :seal-attach-no-seal-id
+               :detail "seal-id が指定されていない"})
+        (and sid (nil? seal-rec))
+        (conj {:rule :seal-attach-unknown-seal
+               :detail (str "組版済みの印影が存在しない: " sid)})))))
+
 (defn check
   "Censors a Registrar-LLM proposal against the governor rules. Returns
    {:ok? bool :violations [..] :confidence c :escalate? bool :high-stakes? bool
@@ -343,7 +381,9 @@
                            (post-filing-intake-violations request st)
                            (intake-fabrication-violations request proposal)
                            (amendment-violations request proposal st)
-                           (dissolution-violations request st)))
+                           (dissolution-violations request st)
+                           (seal-compose-violations request proposal)
+                           (seal-attach-violations request proposal st)))
         conf (:confidence proposal 0.0)
         low? (< conf confidence-floor)
         stakes? (boolean (high-stakes (:stake proposal)))

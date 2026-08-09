@@ -23,8 +23,11 @@
 (deftest phase-0-is-fully-read-only
   (is (empty? (:writes (get phase/phases 0)))))
 
-(deftest phase-3-auto-commits-only-intake
-  (is (= #{:application/intake} (:auto (get phase/phases 3)))))
+(deftest phase-3-auto-commits-intake-and-seal-compose
+  "`:application/intake` and craft `:seal/compose` may auto-commit when
+  governor-clean. Actuation ops never join this set (see
+  `filing-submit-never-auto-at-any-phase`)."
+  (is (= #{:application/intake :seal/compose} (:auto (get phase/phases 3)))))
 
 (deftest gate-hold-always-wins
   (is (= :hold (:disposition (phase/gate 3 {:op :application/intake} :hold)))))

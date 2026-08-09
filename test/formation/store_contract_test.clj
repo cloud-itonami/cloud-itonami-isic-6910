@@ -23,6 +23,7 @@
       (is (= ["app-1" "app-2"] (mapv :id (store/all-applications s))))
       (is (nil? (store/kyc-of s "o-1")))
       (is (nil? (store/assessment-of s "app-1")))
+      (is (nil? (store/seal-of s "seal-1")))
       (is (= [] (store/ledger s)))
       (is (= [] (store/registry-history s)))
       (is (zero? (store/next-sequence s "JPN"))))))
@@ -54,7 +55,16 @@
       (testing "ledger is append-only and order-preserving"
         (store/append-ledger! s {:op :a :disposition :commit})
         (store/append-ledger! s {:op :b :disposition :hold})
-        (is (= [:commit :hold] (mapv :disposition (store/ledger s))))))))
+        (is (= [:commit :hold] (mapv :disposition (store/ledger s)))))
+      (testing "seal craft metadata commits and attaches to an application"
+        (store/commit-record! s {:effect :seal/set :path ["seal-1"]
+                                 :payload {:seal-id "seal-1" :kind :round-vertical
+                                           :text "山田" :svg-hash "abc" :source "inkan.svg/seal"}})
+        (is (= "山田" (:text (store/seal-of s "seal-1"))))
+        (is (= "abc" (:svg-hash (store/seal-of s "seal-1"))))
+        (store/commit-record! s {:effect :seal/attach :path ["app-1"]
+                                 :value {:seal-id "seal-1"}})
+        (is (= "seal-1" (:seal-id (store/application s "app-1"))))))))
 
 (deftest datomic-empty-store-is-usable
   (let [s (store/datomic-store)]

@@ -29,6 +29,7 @@
                :cljs [cljs.reader :as edn])
             [clojure.string :as str]
             [formation.facts :as facts]
+            [formation.seal :as seal]
             [formation.store :as store]
             [langchain.model :as model]))
 
@@ -260,6 +261,89 @@
        :stake      :actuation
        :confidence 0.9})))
 
+
+(defn- compose-seal
+  "Craft a seal SVG via inkan. Coordinates/layout come only from
+  `inkan.svg/seal` -- this advisor never invents geometry. Empty text
+  or an unsupported kind yields a low-confidence proposal whose
+  `:effect :seal/set` still matches `op->effect`, so the RegistrarGovernor's
+  HARD `:empty-seal-text` / `:unsupported-seal-kind` checks are what force
+  HOLD (not a silent noop that would trip `:effect-mismatch`).
+
+  On success the proposal value carries svg-hash + metadata (+ the svg
+  string itself) so `formation.store` can record the craft and the ledger
+  can answer 'which seal image was composed for this subject'."
+  [_db {:keys [subject spec]}]
+  (let [spec (or spec {})
+        result (seal/compose spec)]
+    (if (:ok? result)
+      (let [meta (:metadata result)]
+        {:summary    (str "印影を組版: " (:text meta) " (" (:kind meta) ")")
+         :rationale  "inkan.svg/seal による純関数組版。座標・配置は inkan のみ。"
+         :cites      [:inkan/seal (:kind meta) (:svg-hash meta)]
+         :effect     :seal/set
+         :value      (assoc meta :seal-id subject :svg (:svg result))
+         :stake      nil
+         :confidence 0.97})
+      {:summary    "印影組版を拒否"
+       :rationale  (str "invalid seal request: "
+                        (pr-str (mapv :rule (:violations result))))
+       :cites      []
+       :effect     :seal/set
+       :value      {:seal-id subject
+                    :violations (:violations result)
+                    :kind (:kind spec)
+                    :text (:text spec)}
+       :stake      nil
+       :confidence 0.0})))
+
+(defn- attach-seal
+  "Link a previously composed seal onto a formation application subject.
+  The seal must already exist in the store (`:seal/compose` first); the
+  governor HARD-holds unknown seal-ids and missing applications."
+  [db {:keys [subject seal-id]}]
+  (let [app (store/application db subject)
+        seal-rec (when seal-id (store/seal-of db seal-id))]
+    (cond
+      (nil? app)
+      {:summary    (str "申請 " subject " が見つかりません")
+       :rationale  "no application record"
+       :cites      []
+       :effect     :seal/attach
+       :value      {:seal-id seal-id}
+       :stake      nil
+       :confidence 0.0}
+
+      (nil? seal-id)
+      {:summary    "seal-id が指定されていません"
+       :rationale  "attach requires a composed seal id"
+       :cites      []
+       :effect     :seal/attach
+       :value      {:seal-id nil}
+       :stake      nil
+       :confidence 0.0}
+
+      (nil? seal-rec)
+      {:summary    (str "印影 " seal-id " が未組版です")
+       :rationale  "compose before attach"
+       :cites      []
+       :effect     :seal/attach
+       :value      {:seal-id seal-id}
+       :stake      nil
+       :confidence 0.0}
+
+      :else
+      {:summary    (str "印影 " seal-id " を申請 " subject " に添付")
+       :rationale  (str "inkan craft hash=" (:svg-hash seal-rec)
+                        " kind=" (:kind seal-rec))
+       :cites      [:inkan/seal (:svg-hash seal-rec)]
+       :effect     :seal/attach
+       :value      {:seal-id seal-id
+                    :svg-hash (:svg-hash seal-rec)
+                    :kind (:kind seal-rec)}
+       :stake      nil
+       :confidence 0.95})))
+
 (defn infer
   "Route a request to the right proposal generator.
   request: {:op kw :subject id ...op-specific...}
@@ -274,6 +358,8 @@
      :filing/submit        (propose-filing db request)
      :registry/amend       (propose-amendment db request)
      :registry/dissolve    (propose-dissolution db request)
+     :seal/compose         (compose-seal db request)
+     :seal/attach          (attach-seal db request)
      {:summary "未対応の操作" :rationale (str op) :cites []
       :effect :noop :stake nil :confidence 0.0})))
 
@@ -300,7 +386,7 @@
        "EDNだけを出力します。\n"
        "キー: :summary(人向けドラフト) :rationale(根拠/必ず事実から) "
        ":cites(使った事実キーのベクタ) "
-       ":effect(:application/upsert|:assessment/set|:kyc/set|:filing/mark-submitted|:registry/amend-submitted|:registry/dissolve-submitted) "
+       ":effect(:application/upsert|:assessment/set|:kyc/set|:filing/mark-submitted|:registry/amend-submitted|:registry/dissolve-submitted|:seal/set|:seal/attach) "
        ":stake(:actuation か nil) :confidence(0..1)。\n"
        "重要: 登録されていない法域の要件を絶対に創作してはいけません。"
        "spec-basisが無い場合は :cites を空にし confidence を上げないこと。"))
