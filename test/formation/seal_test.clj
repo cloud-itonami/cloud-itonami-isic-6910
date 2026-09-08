@@ -2,7 +2,7 @@
   "Seal craft wire: valid `:seal/compose` auto-commits (hash + metadata
   on SSoT + ledger); empty name / unsupported kind HARD-hold without
   writing a seal. Coordinates come only from inkan."
-  (:require [clojure.string :as str]
+  (:require [kotoba.lang.text :as str]
             [clojure.test :refer [deftest is testing]]
             [langgraph.graph :as g]
             [formation.store :as store]
