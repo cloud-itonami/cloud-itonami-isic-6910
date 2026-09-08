@@ -13,7 +13,7 @@
   formation actor records that a seal image was composed, under
   governor scrutiny, so an operator can later attach it to a filing
   package."
-  (:require [clojure.string :as str]
+  (:require [kotoba.lang.text :as str]
             [inkan.geometry :as igeom]
             [inkan.svg :as isvg])
   #?(:clj (:import (java.security MessageDigest))))
