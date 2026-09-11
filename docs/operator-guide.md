@@ -8,8 +8,8 @@ This guide is for people who want to start an open business from
 ```bash
 git clone https://github.com/cloud-itonami/cloud-itonami-isic-6910
 cd cloud-itonami-isic-6910
-clojure -M:dev:test
-clojure -M:dev:run
+kbb -M:dev:test
+kbb -M:dev:run
 ```
 
 The default demo uses synthetic applications and officers. Production
@@ -38,8 +38,8 @@ stay outside the repository and be injected through a store adapter.
   `formation.registrarllm`'s `:kyc/screen` path
 - extend `formation.facts/catalog` for every jurisdiction you serve, each
   entry citing the jurisdiction's own official registry as `:provenance`
-- run `clojure -M:dev:test`
-- run `clojure -M:lint`
+- run `kbb -M:dev:test`
+- run `kbb -M:lint`
 - verify audit-ledger export
 - document backup and restore
 - document incident response

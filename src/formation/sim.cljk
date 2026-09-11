@@ -1,5 +1,5 @@
 (ns formation.sim
-  "Demo driver -- `clojure -M:dev:run`. Walks a clean application through
+  "Demo driver -- `kbb -M:dev:run`. Walks a clean application through
   intake -> jurisdiction assessment -> KYC screening -> filing proposal
   (always escalates) -> human approval -> commit -> a post-incorporation
   amendment -> a dissolution (both also always escalate), then shows

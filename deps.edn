@@ -37,9 +37,9 @@ io.github.com-junkawasaki/langgraph-clj
   :dev {:override-deps
         {io.github.com-junkawasaki/langchain-clj
          {:local/root "../../kotoba-lang/langchain"}}}
-  ;; clojure -M:dev:run  -> drive the demo through one OperationActor
+  ;; kbb -M:dev:run  -> drive the demo through one OperationActor
   :run {:main-opts ["-m" "formation.sim"]}
-  ;; clojure -M:dev:render-html [out-file] -> regenerate docs/samples/operator-console.html
+  ;; kbb -M:dev:render-html [out-file] -> regenerate docs/samples/operator-console.html
   ;; through the real actor (flagship checklist item 2, ADR-2607189300 Wave5).
   :render-html {:main-opts ["-m" "formation.render-html"]}
   :test {:extra-paths ["test"]
