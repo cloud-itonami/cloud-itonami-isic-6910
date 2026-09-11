@@ -34,7 +34,7 @@ formation.operation/build          (OperationActor: langgraph-clj StateGraph)
 
 - **Store** -- `MemStore`（既定・依存なし）‖ `DatomicStore`（`langchain.db`
   経由、Datomic Local / kotoba-server pod へ差し替え可能）。両バックエンドは
-  同一 `Store` protocol contract を通す（`test/formation/store_contract_test.clj`
+  同一 `Store` protocol contract を通す（`test/formation/store_contract_test.cljk`
   で MemStore ≡ DatomicStore を保証） -- `cloud-itonami-6310` / `ai-gftd-itonami`
   と同じ `:db-api` 駆動パターン。
 - **Advisor** -- `mock-advisor`（決定論的、デモ/テスト既定）‖

@@ -50,7 +50,7 @@ phase, by construction.** Two independent layers enforce this
 (`formation.governor`'s `:actuation` high-stakes gate and
 `formation.phase`'s phase table, which never puts `:filing/submit`,
 `:registry/amend` or `:registry/dissolve` in any phase's `:auto` set) --
-see `formation.phase`'s docstring and `test/formation/phase_test.clj`'s
+see `formation.phase`'s docstring and `test/formation/phase_test.cljk`'s
 `filing-submit-never-auto-at-any-phase`. The actor may draft, check,
 screen and recommend; a human operator is always the one who actually
 files, amends, dissolves and pays.
@@ -116,15 +116,15 @@ full architecture and decision record.
 
 | File | Role |
 |---|---|
-| `src/formation/store.cljc` | **Store** protocol -- `MemStore` ‖ `DatomicStore` (`langchain.db`, swappable to Datomic Local or a kotoba-server pod) + append-only audit ledger + draft registry history |
-| `src/formation/registry.cljc` | ISO 17442 LEI issuance (ISO 7064 MOD 97-10) + incorporation/amendment/dissolution draft records -- ported from `matsurigoto`'s corp-registry (etzhayyim/root, ADR-2606062300) |
-| `src/formation/facts.cljc` | Per-jurisdiction requirement catalog with an official spec-basis citation per entry, honest coverage reporting |
-| `src/formation/registrarllm.cljc` | **Registrar-LLM Advisor** -- `mock-advisor` ‖ `llm-advisor`; intake/assessment/KYC/filing/amendment/dissolution proposals |
-| `src/formation/governor.cljc` | **RegistrarGovernor** -- effect-matches-op · spec-basis · sanctions hold · KYC-complete · document-complete · post-filing-intake-block · intake-fabrication · amendment-target · dissolution-target · confidence floor · actuation gate |
-| `src/formation/phase.cljc` | **Phase 0→3** -- read-only → assisted intake → assisted assess/screen → supervised (filing always human) |
-| `src/formation/operation.cljc` | **OperationActor** -- langgraph-clj StateGraph |
-| `src/formation/corporate_intel.cljc` | optional cross-reference into [`cloud-itonami-isic-8291`](https://github.com/cloud-itonami/cloud-itonami-isic-8291)'s `:disclosure/screen-name` (ADR-2607110400 §5) -- catches an officer clean on every LOCAL field but flagged in 8291's own sourced PEP/sanctions data; wired into `screen-kyc` via an injected fn, default is a no-op so every prior caller's behavior is unchanged unless explicitly opted in |
-| `src/formation/sim.cljc` | demo driver |
+| `src/formation/store.cljk` | **Store** protocol -- `MemStore` ‖ `DatomicStore` (`langchain.db`, swappable to Datomic Local or a kotoba-server pod) + append-only audit ledger + draft registry history |
+| `src/formation/registry.cljk` | ISO 17442 LEI issuance (ISO 7064 MOD 97-10) + incorporation/amendment/dissolution draft records -- ported from `matsurigoto`'s corp-registry (etzhayyim/root, ADR-2606062300) |
+| `src/formation/facts.cljk` | Per-jurisdiction requirement catalog with an official spec-basis citation per entry, honest coverage reporting |
+| `src/formation/registrarllm.cljk` | **Registrar-LLM Advisor** -- `mock-advisor` ‖ `llm-advisor`; intake/assessment/KYC/filing/amendment/dissolution proposals |
+| `src/formation/governor.cljk` | **RegistrarGovernor** -- effect-matches-op · spec-basis · sanctions hold · KYC-complete · document-complete · post-filing-intake-block · intake-fabrication · amendment-target · dissolution-target · confidence floor · actuation gate |
+| `src/formation/phase.cljk` | **Phase 0→3** -- read-only → assisted intake → assisted assess/screen → supervised (filing always human) |
+| `src/formation/operation.cljk` | **OperationActor** -- langgraph-clj StateGraph |
+| `src/formation/corporate_intel.cljk` | optional cross-reference into [`cloud-itonami-isic-8291`](https://github.com/cloud-itonami/cloud-itonami-isic-8291)'s `:disclosure/screen-name` (ADR-2607110400 §5) -- catches an officer clean on every LOCAL field but flagged in 8291's own sourced PEP/sanctions data; wired into `screen-kyc` via an injected fn, default is a no-op so every prior caller's behavior is unchanged unless explicitly opted in |
+| `src/formation/sim.cljk` | demo driver |
 | `test/formation/*_test.clj` | governor contract (incl. cross-backend on DatomicStore) · phase invariants · LEI conformance · facts coverage · MemStore ≡ DatomicStore CRUD parity · real-LLM advisor (mock-model) · corporate-intelligence integration |
 
 ## Jurisdiction coverage (honest)
