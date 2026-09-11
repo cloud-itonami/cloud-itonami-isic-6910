@@ -89,9 +89,9 @@ proposal still always routes to a human.
 ## Run
 
 ```bash
-clojure -M:dev:run     # walk one clean application through incorporation -> amendment -> dissolution, plus three HARD-hold cases
-clojure -M:dev:test    # governor contract · phase invariants · LEI registry conformance
-clojure -M:lint        # clj-kondo (errors fail; CI mirrors this)
+kbb -M:dev:run     # walk one clean application through incorporation -> amendment -> dissolution, plus three HARD-hold cases
+kbb -M:dev:test    # governor contract · phase invariants · LEI registry conformance
+kbb -M:lint        # clj-kondo (errors fail; CI mirrors this)
 ```
 
 ## Open business

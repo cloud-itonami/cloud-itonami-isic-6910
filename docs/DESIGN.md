@@ -152,7 +152,7 @@ Addendum 13）。 `register-change`（変更登記）/
 （G5 style append-only）。解散も「削除」ではなく「もう1件の追記」であり、
 履歴は消えない。
 
-## 7. デモ（`clojure -M:dev:run`）
+## 7. デモ（`kbb -M:dev:run`）
 
 `formation.sim` は 1件のクリーンな申請（intake → assess → screen → filing
 提案 → 人間承認 → commit → 変更登記提案 → 承認 → 解散提案 → 承認）と、
@@ -160,7 +160,7 @@ Addendum 13）。 `register-change`（変更登記）/
 台帳とドラフト registry record の履歴（incorporation → change → dissolution
 の3件、いずれも消えない）を出力する。
 
-## 8. テスト（`clojure -M:dev:test`）
+## 8. テスト（`kbb -M:dev:test`）
 
 - `governor_contract_test.clj` -- 「Registrar-LLM は governor が拒否する
   record を決してファイル/送金しない」契約。
