@@ -99,7 +99,7 @@ activities) -- 会社設立代行はこの分類に含まれる。
   vendor の liability 集中を避けつつ、governed・auditable な実行基盤を
   共通化できる。
 - (+) 実アクチュエーション不変条件（governor + phase の2層）は
-  `test/formation/phase_test.clj` の `filing-submit-never-auto-at-any-phase`
+  `test/formation/phase_test.cljk` の `filing-submit-never-auto-at-any-phase`
   でリグレッションを機械的に検出できる。
 - (+) `matsurigoto` の LEI/MOD-97-10 実装を再利用し、車輪の再発明をしない。
 - (-) 本 R0 は10法域（JPN/USA-DE/GBR/DEU/EST/KOR/IND/SGP/NZL/CAN）のみ
@@ -116,7 +116,7 @@ activities) -- 会社設立代行はこの分類に含まれる。
 R0 の初期10法域（JPN/USA-DE/GBR/DEU/EST/KOR/IND/SGP/NZL/CAN）に、
 FRA/NOR/DNK/FIN/BEL/CZE/AUS/ZAF/CHE/NLD/ISR の11法域を追加した
 （`formation.facts/catalog`、各エントリは公式ソースを引用、捏造なし）。
-`test/formation/facts_test.clj` は変更なしで green（既存テストは特定の
+`test/formation/facts_test.cljk` は変更なしで green（既存テストは特定の
 jurisdiction 集合に依存しないため）。上記「帰結」の「10法域」という記述は
 追加当時の事実として保持し書き換えない -- 現在の法域数は README /
 `formation.facts/coverage` を参照。
@@ -133,7 +133,7 @@ IRL/HKG/PRT/ESP/ITA/SWE/POL/MEX/BRA の9法域を追加した（`formation.facts
 上記「帰結」の「`MemStore` のみで Datomic/kotoba-server backend への接続は
 未実装」を解消した。`formation.store` に `DatomicStore`（`langchain.db`
 経由）を追加し、`cloud-itonami-6310` / `ai-gftd-itonami` と同じ
-`:db-api` 駆動パターンで実装。`test/formation/store_contract_test.clj`
+`:db-api` 駆動パターンで実装。`test/formation/store_contract_test.cljk`
 （`talent.store-contract-test` と同型）が両バックエンドの同一契約を保証する。
 
 実装過程で発見・修正した実バグ: `registry-history` に格納する値の形が
@@ -167,7 +167,7 @@ Store は本 addendum で `MemStore` ‖ `DatomicStore` の2択になったが�
   は un-overridable hold。
 - `formation.phase`: `:registry/amend` を `write-ops` に追加、**どの
   phase の `:auto` にも追加しない**（`:filing/submit` と同じ構造的不変条件）。
-  `test/formation/phase_test.clj` は `actuation-ops` 集合（`:filing/submit`
+  `test/formation/phase_test.cljk` は `actuation-ops` 集合（`:filing/submit`
   `:registry/amend`）を単一ソースにしてこの2つを一括検証するよう一般化。
 - `formation.store`: `:registry/amend-submitted` effect を両バックエンド
   （`MemStore`/`DatomicStore`）に実装。`register-change` の draft record を
@@ -335,7 +335,7 @@ hold・申請完全不変、無害に見えるパッチでも同様にhold、解
 
 ## Addendum 10 (2026-07-03) -- governor 契約の DatomicStore cross-backend 証明
 
-発見: `test/formation/governor_contract_test.clj` の全テスト（~25件、
+発見: `test/formation/governor_contract_test.cljk` の全テスト（~25件、
 Addendum 1-9 で追加した hold ケース含む）は `formation.store/seed-db`
 （MemStore）専用だった。`store_contract_test.clj` は生の CRUD parity
 （application/officer/kyc/assessment/ledger/registry-history の
