@@ -6,7 +6,7 @@
     Registrar-LLM never files/pays a record the RegistrarGovernor would
     reject, `:filing/submit` NEVER auto-commits at any phase, and every
     decision (commit OR hold) leaves exactly one ledger fact."
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [kotoba.test :refer [deftest is testing]]
             [langgraph.graph :as g]
             [formation.store :as store]
             [formation.operation :as op]))

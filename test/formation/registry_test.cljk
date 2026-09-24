@@ -3,7 +3,7 @@
   arithmetic ported from `matsurigoto`'s corp-registry module
   (etzhayyim/root, ADR-2606062300); these tests are adapted from that
   module's own conformance suite so the port stays provably equivalent."
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [kotoba.test :refer [deftest is testing]]
             [formation.registry :as r]))
 
 (deftest certificate-is-a-draft-not-a-real-filing

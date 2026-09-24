@@ -5,7 +5,7 @@
   change, not a rewrite -- see `talent.store-contract-test` /
   `itonami.store-contract-test` for the same pattern on the other two
   actors in this family."
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [kotoba.test :refer [deftest is testing]]
             [formation.store :as store]))
 
 (defn- backends []
