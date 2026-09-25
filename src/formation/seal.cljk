@@ -13,7 +13,7 @@
   formation actor records that a seal image was composed, under
   governor scrutiny, so an operator can later attach it to a filing
   package."
-  (:require [kotoba.lang.text :as str]
+  (:require [kotoba.bytes :as kbytes] [kotoba.lang.text :as str]
             [inkan.geometry :as igeom]
             [inkan.svg :as isvg])
   #?(:clj (:import (java.security MessageDigest))))
@@ -53,7 +53,7 @@
   [s]
   #?(:clj
      (let [md (MessageDigest/getInstance "SHA-256")
-           bs (.digest md (.getBytes (str s) "UTF-8"))]
+           bs (.digest md (kbytes/utf8-bytes (str s)))]
        ;; BigInteger(1, bytes) preserves leading-zero nibbles via %064x.
        (format "%064x" (BigInteger. 1 bs)))
      :cljs
@@ -85,6 +85,6 @@
                     :date        (:date spec)
                     :size-mm     (or (:size-mm spec) (:size-mm igeom/default-spec))
                     :svg-hash    (sha256-hex svg)
-                    :svg-bytes   #?(:clj (alength (.getBytes svg "UTF-8"))
+                    :svg-bytes   #?(:clj (alength (kbytes/utf8-bytes svg))
                                     :cljs (count svg))
                     :source      "inkan.svg/seal"}}))))
